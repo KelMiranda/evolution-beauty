@@ -1,0 +1,232 @@
+---
+import { centralAmericaCountries, elSalvadorDepartments, municipalitiesByDepartment } from '../lib/geo';
+import { participantEducationLevelOptions, participantGenderOptions, participantRoleFunctionOptions, participantStatusOptions } from '../lib/server/catalogs';
+import type { Participant } from '../lib/server/participants';
+
+interface Props {
+  canEdit: boolean;
+  mode: 'public' | 'internal';
+  reviewPath: string;
+  defaultStatus: (typeof participantStatusOptions)[number];
+  participant?: Participant | null;
+}
+
+const { canEdit, mode, reviewPath, defaultStatus, participant } = Astro.props as Props;
+const isEditMode = !!participant;
+
+const benefits = [
+  'Registro centralizado con código único',
+  'Validación previa antes de guardar',
+  'Base lista para reportes y migración a VPS',
+];
+
+const geoData = JSON.stringify({
+  municipalitiesByDepartment,
+});
+---
+
+<section id="inscripcion" class="py-20 md:py-28 border-t border-ink/10" style="padding-top: var(--section-padding); padding-bottom: var(--section-padding);">
+  <div class="container-page grid lg:grid-cols-12 gap-12 lg:gap-16 items-start">
+    <div class="lg:col-span-5">
+      <p class="font-accent text-xs font-semibold uppercase tracking-[0.25em] text-gold-200 mb-6 reveal">Nuevo participante</p>
+      <h2 class="font-display text-display-lg font-light mb-6 reveal" style="--stagger-delay: 100ms;">
+        Registra participantes en el directorio de ACOES
+      </h2>
+      <p class="font-body text-ink/60 leading-relaxed mb-10 reveal" style="--stagger-delay: 200ms;">
+        Completa el formulario para validar la información antes de guardarla en la base.
+      </p>
+
+      <ul class="space-y-5">
+        {benefits.map((b, i) => (
+          <li class="flex items-start gap-4 font-body text-sm text-ink/75 reveal" style={`--stagger-delay: ${300 + i * 100}ms;`}>
+            <span class="mt-2 w-1.5 h-1.5 rounded-full bg-gold-200 shrink-0"></span>
+            {b}
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <div class="lg:col-span-7 reveal-scale" style="--stagger-delay: 400ms;">
+      {canEdit ? (
+        <form class="bg-sand-50/40 p-8 md:p-10 grid sm:grid-cols-2 gap-5" method="post" action={isEditMode ? `/api/participants/${participant.id}` : reviewPath} id="participant-form">
+          <div class="sm:col-span-1 form-field">
+            <label for="fullName" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Nombre completo</label>
+            <input type="text" id="fullName" name="fullName" required autocomplete="name" placeholder="Nombre completo" value={participant?.full_name ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+          </div>
+
+          <div class="sm:col-span-1 form-field">
+            <label for="documentNumber" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Documento / DUI</label>
+            <input type="text" id="documentNumber" name="documentNumber" required placeholder="00000000-0" value={participant?.document_number ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+          </div>
+
+          <div class="sm:col-span-2 form-field">
+            <label for="birthDate" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Fecha de nacimiento</label>
+            <input type="date" id="birthDate" name="birthDate" required value={participant?.birth_date ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+          </div>
+
+          <div class="sm:col-span-1 form-field">
+            <label for="gender" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Género</label>
+            <select id="gender" name="gender" required class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02] cursor-pointer">
+              <option value="" disabled>Selecciona</option>
+              {participantGenderOptions.map((option) => <option value={option} selected={participant?.gender === option}>{option}</option>)}
+            </select>
+          </div>
+
+          <div class="sm:col-span-1 form-field">
+            <label for="phoneCountry" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">País</label>
+            <select id="phoneCountry" name="phoneCountry" required class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02] cursor-pointer">
+              {centralAmericaCountries.map((country) => (
+                <option value={country.name} data-dial={country.dialCode} selected={isEditMode ? participant.phone_country === country.name : country.code === 'SV'}>{country.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="sm:col-span-2 grid grid-cols-3 gap-3 form-field">
+            <div>
+              <label for="phoneDialCode" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Prefijo</label>
+              <input type="text" id="phoneDialCode" name="phoneDialCode" readonly value={isEditMode ? participant.phone_dial_code : '+503'} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none text-ink/70" />
+            </div>
+            <div class="col-span-2">
+              <label for="phoneNumber" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Número celular</label>
+              <input type="tel" id="phoneNumber" name="phoneNumber" required placeholder="7000-0000" value={participant?.phone_number ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+            </div>
+          </div>
+
+          <div class="sm:col-span-2 form-field">
+            <label for="email" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Correo electrónico</label>
+            <input type="email" id="email" name="email" placeholder="correo@ejemplo.com" value={participant?.email ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+          </div>
+
+          <div class="sm:col-span-2 form-field">
+            <label for="address" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Dirección</label>
+            <input type="text" id="address" name="address" placeholder="Dirección de residencia" value={participant?.address ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+          </div>
+
+          <div class="sm:col-span-1 form-field">
+            <label for="district" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Distrito</label>
+            <input type="text" id="district" name="district" placeholder="Distrito de residencia" value={participant?.district ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+          </div>
+
+          <div class="sm:col-span-1 form-field">
+            <label for="department" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Departamento</label>
+            <select id="department" name="department" required class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02] cursor-pointer">
+              <option value="" disabled>Slecciona</option>
+              {elSalvadorDepartments.map((dept) => <option value={dept} selected={participant?.department === dept}>{dept}</option>)}
+            </select>
+          </div>
+
+          <div class="sm:col-span-1 form-field">
+            <label for="municipality" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Municipio</label>
+            <select id="municipality" name="municipality" required class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02] cursor-pointer">
+              <option value="" disabled>Slecciona un departamento</option>
+              {participant?.municipality ? <option value={participant.municipality} selected>{participant.municipality}</option> : null}
+            </select>
+          </div>
+
+          <div class="sm:col-span-2 form-field">
+            <label for="organization" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Entidad / organización</label>
+            <input type="text" id="organization" name="organization" placeholder="Nombre de la organización o entidad" value={participant?.organization ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+          </div>
+
+          <div class="sm:col-span-2 form-field">
+            <label for="roleFunction" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Función en ACOES</label>
+            <select id="roleFunction" name="roleFunction" required class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02] cursor-pointer">
+              <option value="" disabled>Slecciona</option>
+              {participantRoleFunctionOptions.map((option) => <option value={option} selected={participant?.role_function === option}>{option}</option>)}
+            </select>
+          </div>
+
+          <div class="sm:col-span-2 form-field">
+            <label for="educationLevel" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Nivel educativo</label>
+            <select id="educationLevel" name="educationLevel" class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02] cursor-pointer">
+              <option value="">Selecciona o deja vacío</option>
+              {participantEducationLevelOptions.map((option) => <option value={option} selected={participant?.education_level === option}>{option}</option>)}
+            </select>
+          </div>
+
+          <div class="sm:col-span-2 form-field">
+            <label for="program" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Capacitación a recibir o recibida</label>
+            <input type="text" id="program" name="program" placeholder="Ej: capacitación, taller o seguimiento" value={participant?.program ?? ''} class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02]" />
+          </div>
+
+          {mode === 'internal' ? (
+            <div class="sm:col-span-1 form-field">
+              <label for="status" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Estado</label>
+              <select id="status" name="status" class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02] cursor-pointer">
+                {participantStatusOptions.map((option) => <option value={option} selected={isEditMode ? participant.status === option : defaultStatus === option}>{option}</option>)}
+              </select>
+            </div>
+          ) : (
+            <input type="hidden" name="status" value={isEditMode ? participant.status : defaultStatus} />
+          )}
+
+          <div class="sm:col-span-1 form-field flex items-end">
+            <label class="inline-flex items-center gap-2 text-sm text-ink/70">
+              <input type="checkbox" name="consent" class="rounded border-ink/20 text-gold-200 focus:ring-gold-200" checked={isEditMode ? participant.consent : true} />
+              Autorizo el uso de datos
+            </label>
+          </div>
+
+          <div class="sm:col-span-2 form-field">
+            <label for="notes" class="block text-xs uppercase tracking-wide text-ink/60 mb-2">Observaciones</label>
+            <textarea id="notes" name="notes" rows="4" placeholder="Notas adicionales o referencia de registro" class="w-full bg-cream border border-ink/15 px-4 py-3 text-sm outline-none transition-all duration-300 focus:border-gold-200 focus:shadow-lg focus:shadow-gold-200/10 focus:scale-[1.02] resize-none">{participant?.notes ?? ''}</textarea>
+          </div>
+
+          <input type="hidden" id="phoneFull" name="phone" value={isEditMode ? participant.phone : '+503 7000-0000'} />
+
+          <div class="sm:col-span-2">
+            <button type="submit" class="btn-primary w-full sm:w-auto group">
+              <span>Revisar información</span>
+              <svg class="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </button>
+            <p class="text-xs text-ink/40 mt-3" id="form-status" role="status" aria-live="polite"></p>
+          </div>
+        </form>
+      ) : (
+        <div class="bg-sand-50/40 p-8 md:p-10 border border-ink/10 text-sm text-ink/70">Tu rol actual no tiene permiso para registrar participantes.</div>
+      )}
+    </div>
+  </div>
+
+  <script type="application/json" id="geo-data" is:inline set:html={geoData}></script>
+  <script>
+    const geo = JSON.parse(document.getElementById('geo-data')?.textContent || '{}');
+    const countrySelect = document.getElementById('phoneCountry');
+    const dialCode = document.getElementById('phoneDialCode');
+    const phoneNumber = document.getElementById('phoneNumber');
+    const phoneFull = document.getElementById('phoneFull');
+    const department = document.getElementById('department');
+    const municipality = document.getElementById('municipality');
+
+    const updateDial = () => {
+      if (!(countrySelect instanceof HTMLSelectElement) || !(dialCode instanceof HTMLInputElement)) return;
+      const selected = countrySelect.selectedOptions[0];
+      dialCode.value = selected?.dataset.dial || '+503';
+    };
+
+    const updatePhone = () => {
+      if (!(dialCode instanceof HTMLInputElement) || !(phoneNumber instanceof HTMLInputElement) || !(phoneFull instanceof HTMLInputElement)) return;
+      phoneFull.value = `${dialCode.value} ${phoneNumber.value}`.trim();
+    };
+
+    const updateMunicipalities = () => {
+      if (!(department instanceof HTMLSelectElement) || !(municipality instanceof HTMLSelectElement)) return;
+      /** @type {string[]} */
+      const items = geo.municipalitiesByDepartment?.[department.value] || [];
+      let options = '<option value="" disabled selected>Selecciona</option>';
+      for (const item of items) {
+        options += `<option value="${item}">${item}</option>`;
+      }
+      municipality.innerHTML = options;
+    };
+
+    countrySelect?.addEventListener('change', () => { updateDial(); updatePhone(); });
+    phoneNumber?.addEventListener('input', updatePhone);
+    department?.addEventListener('change', updateMunicipalities);
+
+    updateDial();
+    updatePhone();
+  </script>
+</section>

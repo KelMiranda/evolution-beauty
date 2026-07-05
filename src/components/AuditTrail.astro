@@ -1,0 +1,204 @@
+---
+import type { AuditEventRow } from '../lib/server/audit';
+import type { AuditEventFilters, AuditEntityType } from '../lib/server/audit';
+
+interface Props {
+  events: AuditEventRow[];
+  total: number;
+  filters: AuditEventFilters;
+  page: number;
+}
+
+const { events, total, filters, page } = Astro.props as Props;
+const limit = 50;
+const totalPages = Math.ceil(total / limit);
+
+const entityTypeOptions: AuditEntityType[] = ['participant', 'session', 'user'];
+const actionOptions = ['create', 'update', 'deactivate', 'soft_delete', 'restore'];
+---
+
+<section class="py-20 md:py-28 border-t border-ink/10">
+  <div class="container-page">
+    <div class="mb-8">
+      <p class="section-eyebrow">Auditoría</p>
+      <h2 class="text-display-md font-medium">Historial de eventos</h2>
+    </div>
+
+    <div class="grid lg:grid-cols-12 gap-6">
+      <aside class="lg:sticky lg:top-24 lg:col-span-4 h-fit rounded-shell border border-ink/8 bg-white/80 backdrop-blur-xl p-6 md:p-8 shadow-card">
+        <div class="mb-6">
+          <p class="section-eyebrow mb-2">Filtros</p>
+          <h3 class="text-xl font-display text-ink">Buscar eventos</h3>
+        </div>
+
+        <form id="audit-filter-form" class="space-y-4">
+          <div class="form-field">
+            <label class="form-label" for="entityType">Tipo de entidad</label>
+            <select id="entityType" name="entityType" class="form-select">
+              <option value="">Todas</option>
+              {entityTypeOptions.map((type) => (
+                <option value={type} selected={filters.entityType === type}>{type}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="entityId">ID de entidad</label>
+            <input
+              type="number"
+              id="entityId"
+              name="entityId"
+              value={filters.entityId ?? ''}
+              placeholder="Ej: 1"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="actorUserId">ID de usuario actor</label>
+            <input
+              type="number"
+              id="actorUserId"
+              name="actorUserId"
+              value={filters.actorUserId ?? ''}
+              placeholder="Ej: 1"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="action">Acción</label>
+            <select id="action" name="action" class="form-select">
+              <option value="">Todas</option>
+              {actionOptions.map((act) => (
+                <option value={act} selected={filters.action === act}>{act}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="dateFrom">Desde</label>
+            <input
+              type="date"
+              id="dateFrom"
+              name="dateFrom"
+              value={filters.dateFrom ?? ''}
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="dateTo">Hasta</label>
+            <input
+              type="date"
+              id="dateTo"
+              name="dateTo"
+              value={filters.dateTo ?? ''}
+              class="form-input"
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <button type="submit" class="btn-primary !py-3 !text-[11px]">Filtrar</button>
+            <button type="button" id="clear-filters" class="btn-secondary !py-3 !text-[11px]">Limpiar</button>
+          </div>
+        </form>
+
+        <div class="mt-6 metric-chip">
+          <span class="metric-chip__label">Total eventos</span>
+          <span class="metric-chip__value" id="total-count">{total}</span>
+        </div>
+      </aside>
+
+      <div class="lg:col-span-8 space-y-4">
+        <div class="dashboard-shell">
+          <div class="dashboard-toolbar">
+            <div>
+              <p class="text-[10px] uppercase tracking-[0.28em] text-ink/45 font-semibold">Eventos</p>
+              <h3 class="text-xl font-display text-ink">{total} evento{total !== 1 ? 's' : ''}</h3>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left dashboard-table">
+              <thead>
+                <tr>
+                  <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Fecha</th>
+                  <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Entidad</th>
+                  <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">ID</th>
+                  <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Acción</th>
+                  <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Actor</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-ink/6">
+                {events.length ? events.map((event) => (
+                  <tr class="hover:bg-gold-50/40 transition-colors duration-200">
+                    <td class="!border-0 text-[13px] text-ink/70 whitespace-nowrap">
+                      {new Date(event.created_at).toLocaleString('es-SV')}
+                    </td>
+                    <td class="!border-0 text-[13px] text-ink">{event.entity_type}</td>
+                    <td class="!border-0 text-[13px] text-ink font-mono">{event.entity_id}</td>
+                    <td class="!border-0">
+                      <span class="status-pill">{event.action}</span>
+                    </td>
+                    <td class="!border-0 text-[13px] text-ink/60">{event.actor_user_id ?? '—'}</td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colspan="5" class="!border-0 py-20 text-center">
+                      <div class="flex flex-col items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="text-ink/15">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        <p class="text-sm text-ink/35 font-medium">No hay eventos para mostrar.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {totalPages > 1 ? (
+          <div class="flex items-center justify-center gap-2 py-4">
+            {page > 1 ? (
+              <a href={`/dashboard/auditoria?${new URLSearchParams({ ...(filters.entityType ? { entityType: filters.entityType } : {}), ...(filters.entityId ? { entityId: String(filters.entityId) } : {}), ...(filters.actorUserId ? { actorUserId: String(filters.actorUserId) } : {}), ...(filters.action ? { action: filters.action } : {}), ...(filters.dateFrom ? { dateFrom: filters.dateFrom } : {}), ...(filters.dateTo ? { dateTo: filters.dateTo } : {}), page: String(page - 1) }).toString()}`} class="btn-secondary !py-2 !text-[11px]">
+                Anterior
+              </a>
+            ) : null}
+            <span class="text-sm text-ink/60 px-4">Página {page} de {totalPages}</span>
+            {page < totalPages ? (
+              <a href={`/dashboard/auditoria?${new URLSearchParams({ ...(filters.entityType ? { entityType: filters.entityType } : {}), ...(filters.entityId ? { entityId: String(filters.entityId) } : {}), ...(filters.actorUserId ? { actorUserId: String(filters.actorUserId) } : {}), ...(filters.action ? { action: filters.action } : {}), ...(filters.dateFrom ? { dateFrom: filters.dateFrom } : {}), ...(filters.dateTo ? { dateTo: filters.dateTo } : {}), page: String(page + 1) }).toString()}`} class="btn-secondary !py-2 !text-[11px]">
+                Siguiente
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('audit-filter-form');
+    const clearBtn = document.getElementById('clear-filters');
+
+    const buildUrl = (formData: FormData) => {
+      const params = new URLSearchParams();
+      for (const [key, value] of formData.entries()) {
+        if (value) params.set(key, String(value));
+      }
+      return `/dashboard/auditoria?${params.toString()}`;
+    };
+
+    form?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const formData = new FormData(form as HTMLFormElement);
+      window.location.href = buildUrl(formData);
+    });
+
+    clearBtn?.addEventListener('click', () => {
+      window.location.href = '/dashboard/auditoria';
+    });
+  </script>
+</section>

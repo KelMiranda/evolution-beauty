@@ -1,0 +1,114 @@
+---
+interface Props {
+  mode?: 'public' | 'dashboard';
+}
+
+const { mode = 'dashboard' } = Astro.props as Props;
+
+const navLinks = [
+  ...(mode === 'public'
+    ? [
+        { label: 'Inicio', href: '#inicio' },
+        { label: 'Servicios', href: '#servicios' },
+        { label: 'Proceso', href: '#proceso' },
+        { label: 'Registro', href: '/registro' },
+      ]
+    : [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Participantes', href: '/dashboard/participantes' },
+        { label: 'Alta', href: '/dashboard/participantes/nuevo' },
+        { label: 'Reportes', href: '/dashboard/exportaciones' },
+      ]),
+];
+
+const programLinks = mode === 'public'
+  ? [
+      { label: 'Registro público', href: '/registro' },
+      { label: 'Consulta', href: '/login' },
+      { label: 'Contacto', href: '#contacto' },
+      { label: 'Ayuda', href: '#inicio' },
+    ]
+  : [
+      { label: 'Registro', href: '/dashboard/participantes/nuevo' },
+      { label: 'Listado', href: '/dashboard/participantes' },
+      { label: 'Reporte', href: '/dashboard/exportaciones' },
+      { label: 'Exportación', href: '/dashboard/exportaciones' },
+    ];
+
+const socials = [
+  { label: 'Facebook', symbol: 'f' },
+  { label: 'Instagram', symbol: '@' },
+  { label: 'WhatsApp', symbol: 'W' },
+];
+
+const year = new Date().getFullYear();
+---
+
+<footer class="bg-founder-metal text-cream pt-20 pb-10">
+  <div class="container-page grid md:grid-cols-4 gap-12 mb-16 reveal-stagger">
+    <div class="md:col-span-1 reveal">
+      <p class="font-display text-2xl mb-3 tracking-tight">
+        ACOES <span class="block text-sm font-light text-gold-200/70 mt-1">{mode === 'public' ? 'Portal público' : 'Directorio del ecosistema humano'}</span>
+      </p>
+      <p class="font-body text-sm text-cream/55 leading-relaxed">
+        {mode === 'public'
+          ? 'Acceso público para conocer el proyecto y registrarse.'
+          : 'Centralizando el registro de participantes, el seguimiento operativo y los reportes básicos.'}
+      </p>
+    </div>
+
+    <nav aria-label="Navegación" class="reveal" style="--stagger-delay: 100ms;">
+      <p class="font-accent text-xs font-semibold uppercase tracking-[0.25em] text-cream/40 mb-5">Navegación</p>
+      <ul class="space-y-3">
+        {navLinks.map((link) => (
+          <li>
+            <a href={link.href} class="font-body text-sm text-cream/70 hover:text-gold-200 transition-colors duration-300">
+              {link.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <nav aria-label="Programas" class="reveal" style="--stagger-delay: 200ms;">
+      <p class="font-accent text-xs font-semibold uppercase tracking-[0.25em] text-cream/40 mb-5">Secciones</p>
+      <ul class="space-y-3">
+        {programLinks.map((p) => (
+          <li>
+            <a href={p.href} class="font-body text-sm text-cream/70 hover:text-gold-200 transition-colors duration-300">
+              {p.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <div class="reveal" style="--stagger-delay: 300ms;">
+      <p class="font-accent text-xs font-semibold uppercase tracking-[0.25em] text-cream/40 mb-5">Contacto</p>
+      <ul class="space-y-3 font-body text-sm text-cream/70">
+        <li><a href="tel:+5030000000" class="hover:text-gold-200 transition-colors duration-300">+503 0000-0000</a></li>
+        <li><a href="mailto:info@acoes.org" class="hover:text-gold-200 transition-colors duration-300">info@acoes.org</a></li>
+        <li>El Salvador, Centro América</li>
+      </ul>
+
+      <ul class="flex gap-3 mt-6">
+        {socials.map((s) => (
+          <li>
+            <a
+              href="#"
+              aria-label={s.label}
+              class="w-9 h-9 flex items-center justify-center border border-cream/20 rounded-full text-xs hover:border-gold-200 hover:text-gold-200 hover:scale-110 transition-all duration-300"
+            >
+              {s.symbol}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+
+  <div class="container-page pt-8 border-t border-cream/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-cream/40 font-body reveal">
+    <p>© {year} ACOES. Todos los derechos reservados.</p>
+    <p class="uppercase tracking-widest-2">{mode === 'public' ? 'Portal · Registro' : 'Registro · Control · Reporte'}</p>
+  </div>
+</footer>

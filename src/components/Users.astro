@@ -1,0 +1,122 @@
+---
+import type { UserRow } from '../lib/server/users';
+
+interface Props {
+  users: UserRow[];
+  canManage: boolean;
+}
+
+const { users, canManage } = Astro.props as Props;
+
+const roleBadgeClass: Record<string, string> = {
+  admin: 'bg-blue-100/60 text-blue-700',
+  facilitadora: 'bg-gold-100/60 text-gold-200',
+  participante: 'bg-slate-100/60 text-slate-600',
+};
+---
+
+<section class="py-20 md:py-28 border-t border-ink/10">
+  <div class="container-page">
+    <div class="rounded-shell border border-ink/8 bg-white/80 p-8 md:p-10 shadow-shell">
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <p class="section-eyebrow">Administración</p>
+          <h2 class="text-display-md font-medium">Usuarios del sistema</h2>
+        </div>
+        {canManage ? (
+          <a href="/dashboard/usuarios/nuevo" class="btn-primary !py-3 !text-[11px]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+            Nuevo usuario
+          </a>
+        ) : null}
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left dashboard-table">
+          <thead>
+            <tr>
+              <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Email</th>
+              <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Nombre</th>
+              <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Rol</th>
+              <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Estado</th>
+              <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em]">Fecha</th>
+              {canManage ? <th class="!bg-ink/95 !text-cream/70 !font-semibold !text-[10px] !tracking-[0.22em] !text-right">Acciones</th> : null}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-ink/6">
+            {users.length ? users.map((user) => (
+              <tr class="group hover:bg-gold-50/40 transition-colors duration-200">
+                <td class="!border-0 text-[13px] text-ink">{user.email}</td>
+                <td class="!border-0 text-[13px] text-ink font-medium">{user.full_name}</td>
+                <td class="!border-0">
+                  <span class:list={['inline-flex items-center rounded-chip px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide', roleBadgeClass[user.role] ?? 'bg-slate-100 text-slate-600']}>
+                    {user.role}
+                  </span>
+                </td>
+                <td class="!border-0">
+                  <span class:list={['status-pill', user.active ? 'status-pill--active' : 'status-pill--inactive']}>
+                    {user.active ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
+                <td class="!border-0 text-[13px] text-ink/60">{new Date(user.created_at).toLocaleDateString('es-SV')}</td>
+                {canManage ? (
+                  <td class="!border-0 !text-right">
+                    <div class="flex items-center justify-end gap-1">
+                      <a
+                        href={`/dashboard/usuarios/editar/${user.id}`}
+                        title="Editar"
+                        class="icon-btn icon-btn--primary"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                      </a>
+                      {user.active ? (
+                        <button
+                          type="button"
+                          title="Desactivar"
+                          class="icon-btn icon-btn--danger deactivate-btn"
+                          data-id={user.id}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                ) : null}
+              </tr>
+            )) : (
+              <tr>
+                <td colspan={canManage ? "6" : "5"} class="!border-0 py-20 text-center">
+                  <div class="flex flex-col items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="text-ink/15">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    <p class="text-sm text-ink/35 font-medium">No hay usuarios registrados.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {canManage ? (
+    <script>
+      document.querySelectorAll('.deactivate-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          if (!confirm('¿Estás seguro de desactivar este usuario?')) return;
+          try {
+            const res = await fetch(`/api/users/${id}`, { method: 'PATCH' });
+            if (res.ok || res.redirected) {
+              window.location.href = '/dashboard/usuarios?deactivated=1';
+            }
+          } catch (e) {
+            console.error('Error:', e);
+          }
+        });
+      });
+    </script>
+  ) : null}
+</section>

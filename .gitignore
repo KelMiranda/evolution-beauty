@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.astro/
+.env
+cookie.txt
+.DS_Store
+.idea/
+.vscode/
+.atl/

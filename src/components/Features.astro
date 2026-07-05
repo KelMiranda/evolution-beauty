@@ -1,0 +1,43 @@
+---
+import SectionHeading from './SectionHeading.astro';
+
+const features = [
+  {
+    title: 'Captura de datos',
+    description: 'Formulario estructurado para ingresar participantes con validación básica y datos esenciales.',
+  },
+  {
+    title: 'Base central',
+    description: 'Registros guardados en una capa persistente preparada para migrar a base de datos real.',
+  },
+  {
+    title: 'Reporte básico',
+    description: 'Listados y exportación de datos para seguimiento operativo y validación con ACOES.',
+  },
+];
+---
+
+<section id="servicios" class="py-20 md:py-28 border-t border-ink/10" style="padding-top: var(--section-padding); padding-bottom: var(--section-padding);">
+  <div class="container-page">
+    <SectionHeading
+      eyebrow="Cómo funciona"
+      title="Un módulo simple, útil y listo para crecer"
+      align="left"
+    />
+
+    <div class="grid md:grid-cols-3 gap-8 mt-14">
+      {features.map((feature, index) => (
+        <div class="group relative bg-white rounded-card p-8 md:p-10 flex flex-col gap-5 shadow-card hover:shadow-dropdown transition-all duration-500 hover:-translate-y-1">
+          <span class="font-display text-5xl text-gold-200/40 font-light">
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <h3 class="text-xl font-display font-medium text-ink">{feature.title}</h3>
+          <p class="text-ink/60 leading-relaxed text-sm md:text-base font-body">
+            {feature.description}
+          </p>
+          <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-gold-200 to-gold-100 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

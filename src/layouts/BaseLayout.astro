@@ -1,0 +1,211 @@
+---
+import '../styles/global.css';
+import { ViewTransitions } from 'astro:transitions';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+}
+
+const {
+  title = 'ACOES — Directorio del Ecosistema Humano',
+  description = 'Sistema de registro de participantes para ACOES: formulario, base de datos, listado y reporte básico.',
+  image = '/images/og-cover.jpg',
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalURL} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(image, Astro.site)} />
+    <meta property="og:locale" content="es_SV" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL(image, Astro.site)} />
+
+    <!-- Preconnect for font performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- View Transitions -->
+    <ViewTransitions />
+
+    <!-- Structured data: Local Business / Education -->
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'EducationalOrganization',
+      name: 'ACOES',
+      description: 'Directorio del ecosistema humano ACOES: registro, consulta y reporte básico.',
+      address: {
+        '@type': 'PostalAddress',
+        addressCountry: 'SV',
+        addressLocality: 'El Salvador',
+      },
+      email: 'info@evolutionbeauty.com',
+      telephone: '+503-0000-0000',
+    })} />
+  </head>
+  <body>
+    <slot />
+
+    <!-- Scroll Animation Observer -->
+    <script>
+      function initScrollAnimations() {
+        const observerOptions = {
+          threshold: 0.15,
+          rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              const target = entry.target as HTMLElement;
+              target.classList.add('in-view');
+              // For single-use animations, unobserve after trigger
+              if (target.classList.contains('reveal') || 
+                  target.classList.contains('reveal-fade') ||
+                  target.classList.contains('reveal-scale') ||
+                  target.classList.contains('underline-expand')) {
+                observer.unobserve(target);
+              }
+            }
+          });
+        }, observerOptions);
+
+        // Observe all animated elements
+        document.querySelectorAll<HTMLElement>('.reveal, .reveal-fade, .reveal-scale, .reveal-stagger, .text-reveal, .underline-expand').forEach((el) => {
+          observer.observe(el);
+        });
+      }
+
+      // Initialize on page load and after View Transitions
+      initScrollAnimations();
+      document.addEventListener('astro:after-swap', initScrollAnimations);
+    </script>
+
+    <!-- Counter Animation Script -->
+    <script>
+      function animateCounter(el: HTMLElement) {
+        const target = parseInt(el.getAttribute('data-target') || '0', 10);
+        const suffix = el.getAttribute('data-suffix') || '';
+        const duration = 2000;
+        const start = performance.now();
+
+        function update(currentTime: number) {
+          const elapsed = currentTime - start;
+          const progress = Math.min(elapsed / duration, 1);
+          // Ease out expo
+          const easeOut = 1 - Math.pow(1 - progress, 4);
+          const current = Math.floor(easeOut * target);
+          el.textContent = current + suffix;
+          
+          if (progress < 1) {
+            requestAnimationFrame(update);
+          } else {
+            el.textContent = target + suffix;
+          }
+        }
+
+        requestAnimationFrame(update);
+      }
+
+      function initCounters() {
+        const counterObserver = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              animateCounter(entry.target as HTMLElement);
+              counterObserver.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.5 });
+
+        document.querySelectorAll<HTMLElement>('.counter').forEach((el) => {
+          counterObserver.observe(el);
+        });
+      }
+
+      initCounters();
+      document.addEventListener('astro:after-swap', initCounters);
+    </script>
+
+    <!-- Parallax Effect Script -->
+    <script>
+      function initParallax() {
+        const parallaxElements = document.querySelectorAll<HTMLElement>('.parallax-element');
+        
+        if (window.innerWidth <= 768) return;
+
+        let ticking = false;
+
+        function updateParallax() {
+          const scrollY = window.scrollY;
+          parallaxElements.forEach((el) => {
+            const speed = parseFloat(el.getAttribute('data-speed') || '0.5');
+            const rect = el.getBoundingClientRect();
+            const offsetTop = rect.top + scrollY;
+            const relativeScroll = scrollY - offsetTop;
+            el.style.transform = `translateY(${relativeScroll * speed}px)`;
+          });
+          ticking = false;
+        }
+
+        window.addEventListener('scroll', () => {
+          if (!ticking) {
+            requestAnimationFrame(updateParallax);
+            ticking = true;
+          }
+        }, { passive: true });
+      }
+
+      initParallax();
+      document.addEventListener('astro:after-swap', initParallax);
+    </script>
+
+    <!-- 3D Tilt Effect Script -->
+    <script>
+      function initTiltCards() {
+        document.querySelectorAll<HTMLElement>('.tilt-card').forEach((card) => {
+          card.addEventListener('mousemove', (e: MouseEvent) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const rotateX = (y - centerY) / 20;
+            const rotateY = (centerX - x) / 20;
+            
+            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+          });
+
+          card.addEventListener('mouseleave', () => {
+            card.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) scale(1)';
+          });
+        });
+      }
+
+      initTiltCards();
+      document.addEventListener('astro:after-swap', initTiltCards);
+    </script>
+  </body>
+</html>
