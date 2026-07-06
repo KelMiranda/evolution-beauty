@@ -1,6 +1,6 @@
 import { query } from './db';
 
-export type AuditEntityType = 'participant' | 'session' | 'user';
+export type AuditEntityType = 'participant' | 'session' | 'user' | 'course' | 'enrollment';
 
 export type AuditEventPayload = {
   entityType: AuditEntityType;

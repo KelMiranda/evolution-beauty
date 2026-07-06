@@ -6,12 +6,24 @@ import { canonicalRoles } from './permissions';
 let bootstrapped = false;
 let bootstrapPromise: Promise<void> | null = null;
 
-function defaultAdminEmail() {
-  return process.env.INITIAL_ADMIN_EMAIL ?? 'admin@acoes.local';
+function requiredBootstrapEmail() {
+  const email = process.env.INITIAL_ADMIN_EMAIL?.trim();
+
+  if (!email) {
+    throw new Error('INITIAL_ADMIN_EMAIL is required when bootstrapping a new database');
+  }
+
+  return email;
 }
 
-function defaultAdminPassword() {
-  return process.env.INITIAL_ADMIN_PASSWORD ?? 'Admin1234!';
+function requiredBootstrapPassword() {
+  const password = process.env.INITIAL_ADMIN_PASSWORD;
+
+  if (!password) {
+    throw new Error('INITIAL_ADMIN_PASSWORD is required when bootstrapping a new database');
+  }
+
+  return password;
 }
 
 async function createTables() {
@@ -80,6 +92,51 @@ async function createTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS courses (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      level TEXT NOT NULL,
+      instructor TEXT NOT NULL,
+      instructor_bio TEXT,
+      price NUMERIC(10,2) NOT NULL DEFAULT 0,
+      price_original NUMERIC(10,2),
+      image TEXT,
+      fecha_inicio DATE NOT NULL,
+      fecha_fin DATE NOT NULL,
+      horario TEXT,
+      ubicacion TEXT,
+      departamento TEXT,
+      municipio TEXT,
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      cupo_maximo INTEGER NOT NULL DEFAULT 0,
+      inscritos INTEGER NOT NULL DEFAULT 0,
+      estado TEXT NOT NULL DEFAULT 'draft',
+      tags JSONB,
+      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS enrollments (
+      id BIGSERIAL PRIMARY KEY,
+      course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      participant_id BIGINT REFERENCES participants(id) ON DELETE SET NULL,
+      enrolled_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      full_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      dui TEXT,
+      fecha_inscripcion DATE NOT NULL DEFAULT CURRENT_DATE,
+      estado TEXT NOT NULL DEFAULT 'confirmed',
+      notas TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'facilitadora', 'participante'));
 
@@ -96,6 +153,19 @@ async function createTables() {
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS phone_country TEXT NOT NULL DEFAULT 'El Salvador';
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS phone_dial_code TEXT NOT NULL DEFAULT '+503';
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS phone_number TEXT NOT NULL DEFAULT '';
+
+    ALTER TABLE courses DROP CONSTRAINT IF EXISTS courses_estado_check;
+    ALTER TABLE courses ADD CONSTRAINT courses_estado_check CHECK (estado IN ('draft', 'published', 'enrolling', 'in_progress', 'completed', 'cancelled'));
+
+    ALTER TABLE courses ADD COLUMN IF NOT EXISTS departamento TEXT;
+    ALTER TABLE courses ADD COLUMN IF NOT EXISTS municipio TEXT;
+
+    ALTER TABLE enrollments DROP CONSTRAINT IF EXISTS enrollments_estado_check;
+    ALTER TABLE enrollments ADD CONSTRAINT enrollments_estado_check CHECK (estado IN ('confirmed', 'cancelled', 'withdrawn'));
+
+    CREATE UNIQUE INDEX IF NOT EXISTS enrollments_active_course_participant_idx
+      ON enrollments (course_id, participant_id)
+      WHERE estado NOT IN ('cancelled', 'withdrawn') AND participant_id IS NOT NULL;
   `);
 
   await query(`UPDATE users SET role = CASE role WHEN 'operator' THEN 'facilitadora' WHEN 'viewer' THEN 'participante' ELSE role END`);
@@ -109,12 +179,12 @@ async function seedAdmin() {
     return;
   }
 
-  const passwordHash = await bcrypt.hash(defaultAdminPassword(), 10);
+  const passwordHash = await bcrypt.hash(requiredBootstrapPassword(), 10);
 
   await query(
     `INSERT INTO users (email, password_hash, full_name, role, active)
      VALUES ($1, $2, $3, $4, TRUE)`,
-    [defaultAdminEmail(), passwordHash, 'Admin ACOES', canonicalRoles[0]],
+    [requiredBootstrapEmail(), passwordHash, 'Admin ACOES', canonicalRoles[0]],
   );
 }
 

@@ -6,15 +6,16 @@
 
 @layer base {
   :root {
-    --background: 30 6% 10%;
-    --foreground: 40 20% 97%;
-    --card: 30 8% 13%;
+    /* Premium Dark Palette: Charcoal + Marfil + Dorado */
+    --background: 30 6% 10%;          /* #1C1917 - Charcoal */
+    --foreground: 40 20% 97%;         /* #FAF8F5 - Marfil */
+    --card: 30 8% 13%;                /* #23201E - Dark surface */
     --card-foreground: 40 20% 97%;
     --popover: 30 8% 13%;
     --popover-foreground: 40 20% 97%;
-    --primary: 42 50% 54%;
+    --primary: 42 50% 54%;            /* #C9A84C - Gold */
     --primary-foreground: 30 6% 10%;
-    --secondary: 30 6% 16%;
+    --secondary: 30 6% 16%;           /* #2A2624 */
     --secondary-foreground: 40 20% 97%;
     --muted: 30 5% 20%;
     --muted-foreground: 35 10% 55%;
@@ -55,19 +56,23 @@
   }
 }
 
+/* Display font (Bodoni Moda - Haute Couture) */
 .font-display {
   font-family: 'Bodoni Moda', 'Didot', Georgia, serif;
   font-optical-sizing: auto;
 }
 
+/* Body font */
 .font-body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* Mono font */
 .font-mono {
   font-family: 'JetBrains Mono', 'SF Mono', monospace;
 }
 
+/* Custom scrollbar - luxury */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -83,15 +88,18 @@
   background: #C9A84C;
 }
 
+/* Selection */
 ::selection {
   background: rgba(201, 168, 76, 0.3);
   color: #FAF8F5;
 }
 
+/* Smooth transitions for all interactive elements */
 button, a, input, select, textarea {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Float animation */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-12px); }
@@ -100,9 +108,10 @@ button, a, input, select, textarea {
   animation: float 3s ease-in-out infinite;
 }
 
+/* Shimmer effect for loading */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
-  100% { backgroundPosition: 200% 0; }
+  100% { background-position: 200% 0; }
 }
 .animate-shimmer {
   background: linear-gradient(90deg, transparent 25%, rgba(201,168,76,0.05) 50%, transparent 75%);
@@ -110,6 +119,7 @@ button, a, input, select, textarea {
   animation: shimmer 2s ease-in-out infinite;
 }
 
+/* Line reveal */
 @keyframes lineReveal {
   from { transform: scaleX(0); transform-origin: left; }
   to { transform: scaleX(1); transform-origin: left; }
@@ -118,6 +128,7 @@ button, a, input, select, textarea {
   animation: lineReveal 0.8s ease-out forwards;
 }
 
+/* Fade in up */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -126,6 +137,7 @@ button, a, input, select, textarea {
   animation: fadeInUp 0.6s ease-out forwards;
 }
 
+/* Scale in */
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }

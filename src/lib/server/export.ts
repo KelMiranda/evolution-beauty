@@ -1,7 +1,7 @@
 import type { Participant } from './participants';
-import * as XLSX from 'xlsx';
+import writeExcelFile from 'write-excel-file/node';
 
-export function exportParticipantsXlsx(participants: Participant[]): Buffer {
+export async function exportParticipantsXlsx(participants: Participant[]): Promise<Buffer> {
   const headers = [
     'ID', 'Código', 'Nombre completo', 'Documento', 'Nacimiento', 'Género', 'País', 'Prefijo', 'Número', 'Teléfono completo', 'Correo',
     'Dirección', 'Municipio', 'Departamento', 'Distrito', 'Entidad', 'Función', 'Nivel educativo', 'Programa', 'Estado', 'Vigencia', 'Consentimiento', 'Creado'
@@ -33,11 +33,5 @@ export function exportParticipantsXlsx(participants: Participant[]): Buffer {
     participant.created_at,
   ]);
 
-  const aoa = [headers, ...rows];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Participantes');
-
-  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  return buf;
+  return writeExcelFile([headers, ...rows], { sheet: 'Participantes' }).toBuffer();
 }

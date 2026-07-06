@@ -9,12 +9,16 @@ export type PermissionKey =
   | 'participants:export'
   | 'participants:audit'
   | 'users:manage'
-  | 'users:audit';
+  | 'users:audit'
+  | 'courses:view'
+  | 'courses:manage'
+  | 'enrollments:view'
+  | 'enrollments:manage';
 
 const permissionMatrix: Record<CanonicalRole, PermissionKey[]> = {
-  admin: ['dashboard:view', 'participants:create', 'participants:manage', 'participants:export', 'participants:audit', 'users:manage', 'users:audit'],
-  facilitadora: ['participants:create'],
-  participante: [],
+  admin: ['dashboard:view', 'participants:create', 'participants:manage', 'participants:export', 'participants:audit', 'users:manage', 'users:audit', 'courses:view', 'courses:manage', 'enrollments:view', 'enrollments:manage'],
+  facilitadora: ['participants:create', 'courses:view', 'enrollments:view'],
+  participante: ['courses:view'],
 };
 
 export function normalizeRole(role: string): CanonicalRole {
@@ -66,4 +70,20 @@ export function canViewAuditTrail(user: { role: CanonicalRole } | null) {
 
 export function canManageUsers(user: { role: CanonicalRole } | null) {
   return hasPermission(user, 'users:manage');
+}
+
+export function canViewCourses(user: { role: CanonicalRole } | null) {
+  return hasPermission(user, 'courses:view');
+}
+
+export function canManageCourses(user: { role: CanonicalRole } | null) {
+  return hasPermission(user, 'courses:manage');
+}
+
+export function canViewEnrollments(user: { role: CanonicalRole } | null) {
+  return hasPermission(user, 'enrollments:view');
+}
+
+export function canManageEnrollments(user: { role: CanonicalRole } | null) {
+  return hasPermission(user, 'enrollments:manage');
 }

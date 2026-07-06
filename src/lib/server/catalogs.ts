@@ -28,6 +28,29 @@ export type ParticipantEducationLevel = (typeof participantEducationLevelOptions
 export type ParticipantStatus = (typeof participantStatusOptions)[number];
 export type ParticipantLifecycleState = (typeof participantLifecycleOptions)[number];
 
+export const courseCategoryOptions = [
+  'Colorimetría',
+  'Corte',
+  'Manicure',
+  'Maquillaje',
+  'Tratamientos',
+  'Barbería',
+  'Estilismo',
+  'Spa',
+] as const;
+
+export const courseLevelOptions = ['Básico', 'Intermedio', 'Avanzado'] as const;
+
+export const courseStateOptions = ['draft', 'published', 'enrolling', 'in_progress', 'completed', 'cancelled'] as const;
+
+export type CourseCategory = (typeof courseCategoryOptions)[number];
+export type CourseLevel = (typeof courseLevelOptions)[number];
+export type CourseState = (typeof courseStateOptions)[number];
+
+export const enrollmentStateOptions = ['confirmed', 'cancelled', 'withdrawn'] as const;
+
+export type EnrollmentState = (typeof enrollmentStateOptions)[number];
+
 export function getCountryDialCode(countryName: string) {
   return participantCountryOptions.find((country) => country.name === countryName)?.dialCode ?? '+503';
 }

@@ -1,67 +1,29 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router/dom';
-import { api, getMe, login as apiLogin, logout as apiLogout, AuthUser } from '@/services/api';
-
-export type AuthState = {
-  user: AuthUser | null;
-  loading: boolean;
-  error: string | null;
-};
+import { useState, useEffect, useCallback } from 'react'
+import { login as loginApi, getCurrentUser, logout as logoutApi } from '@/services/api'
+import type { User, LoginCredentials } from '@/types'
 
 export function useAuth() {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    loading: true,
-    error: null,
-  });
-  const navigate = useNavigate();
-
-  const checkAuth = useCallback(async () => {
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const { user } = await getMe();
-      setState({ user, loading: false, error: null });
-    } catch (err) {
-      setState({ user: null, loading: false, error: null });
-    }
-  }, []);
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+    getCurrentUser().then(u => {
+      setUser(u)
+      setLoading(false)
+    })
+  }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      const { user, redirectTo } = await apiLogin(email, password);
-      setState({ user, loading: false, error: null });
-      navigate(redirectTo);
-      return { success: true as const, redirectTo };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Login failed';
-      setState((prev) => ({ ...prev, loading: false, error: message }));
-      return { success: false as const, error: message };
-    }
-  }, [navigate]);
+  const login = useCallback(async (credentials: LoginCredentials) => {
+    const result = await loginApi(credentials)
+    localStorage.setItem('token', result.token)
+    setUser(result.user)
+    return result.user
+  }, [])
 
-  const logout = useCallback(async () => {
-    setState((prev) => ({ ...prev, loading: true, error: null }));
-    try {
-      await apiLogout();
-      setState({ user: null, loading: false, error: null });
-      navigate('/login');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Logout failed';
-      setState((prev) => ({ ...prev, loading: false, error: message }));
-    }
-  }, [navigate]);
+  const logout = useCallback(() => {
+    logoutApi()
+    setUser(null)
+  }, [])
 
-  return {
-    user: state.user,
-    loading: state.loading,
-    error: state.error,
-    login,
-    logout,
-    checkAuth,
-  };
+  return { user, loading, login, logout, isAuthenticated: !!user }
 }

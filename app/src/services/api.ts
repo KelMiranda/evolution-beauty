@@ -1,26 +1,14 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4321';
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
-export type AuthUser = {
-  id: number;
-  email: string;
-  full_name: string;
-  role: 'admin' | 'facilitadora' | 'participante';
-  active: boolean;
-};
+// Import reference types
+import type { Registro, User, Curso, InscripcionCurso, DashboardStats, LoginCredentials } from '@/types'
 
-export type LoginResponse = {
-  user: AuthUser;
-  redirectTo: string;
-};
-
-export type ApiError = {
-  error: string;
-  details?: Record<string, string[]>;
-};
+// Import our backend types for mapping
+import type { AuthUser, Participant, Course } from './api.backend.types'
 
 function getErrorMessage(response: Response): string {
   try {
-    const data = response.json() as ApiError;
+    const data = response.json() as unknown as { error: string };
     return data.error ?? 'Unknown error';
   } catch {
     return response.statusText;
@@ -36,6 +24,7 @@ async function request<T>(
 
   const response = await fetch(url, {
     ...options,
+    method,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
@@ -81,157 +70,467 @@ export const api = {
   },
 };
 
-// Auth API
-export async function login(email: string, password: string): Promise<LoginResponse> {
-  return api.post<LoginResponse>('/api/login', { email, password });
+// ============================
+// AUTH
+// ============================
+export async function login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
+  // Map correo/contrasena to email/password for our backend
+  const response = await api.post<{ user: AuthUser; redirectTo: string }>('/api/login', {
+    email: credentials.correo,
+    password: credentials.contrasena,
+  });
+  
+  // Map our AuthUser to reference User
+  const mappedUser: User = {
+    id: String(response.user.id),
+    nombre: response.user.full_name,
+    correo: response.user.email,
+    rol: response.user.role === 'facilitadora' ? 'operador' : response.user.role,
+  };
+  
+  return { user: mappedUser, token: 'session' };
 }
 
-export async function logout(): Promise<{ ok: boolean }> {
-  return api.post<{ ok: boolean }>('/api/logout');
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const response = await api.get<{ user: AuthUser }>('/api/me');
+    if (!response.user) return null;
+    
+    const mappedUser: User = {
+      id: String(response.user.id),
+      nombre: response.user.full_name,
+      correo: response.user.email,
+      rol: response.user.role === 'facilitadora' ? 'operador' : response.user.role,
+    };
+    
+    return mappedUser;
+  } catch {
+    return null;
+  }
 }
 
-export async function getMe(): Promise<{ user: AuthUser }> {
-  return api.get<{ user: AuthUser }>('/api/me');
+export function logout(): void {
+  // Call our backend logout endpoint
+  api.post('/api/logout').catch(console.error);
 }
 
-// Participants API
-export type Participant = {
-  id: number;
-  participant_code: string;
-  full_name: string;
-  document_number: string;
-  birth_date: string;
-  gender: string;
-  phone_country: string;
-  phone_dial_code: string;
-  phone_number: string;
-  phone: string;
-  email: string | null;
-  address: string | null;
-  municipality: string | null;
-  department: string | null;
-  district: string | null;
-  organization: string | null;
-  role_function: string;
-  education_level: string | null;
-  program: string | null;
-  status: string;
-  lifecycle_state: 'active' | 'inactive';
-  deleted_at: string | null;
-  deleted_by: number | null;
-  notes: string | null;
-  consent: boolean;
-  created_by: number | null;
-  updated_by: number | null;
-  created_at: string;
-  updated_at: string;
-};
+// ============================
+// REGISTROS (Participants mapped to Registros)
+// ============================
+function mapParticipantToRegistro(p: Participant): Registro {
+  return {
+    id: String(p.id),
+    nombre: p.full_name,
+    dui: p.document_number || '',
+    fechaNacimiento: p.birth_date || '',
+    genero: p.gender || '',
+    pais: p.phone_country || 'El Salvador',
+    prefijo: p.phone_dial_code || '+503',
+    celular: p.phone_number || '',
+    correo: p.email || '',
+    direccion: p.address || '',
+    distrito: p.district || '',
+    departamento: p.department || '',
+    municipio: p.municipality || '',
+    entidad: p.organization || '',
+    funcion: p.role_function || '',
+    nivelEducativo: p.education_level || '',
+    capacitacion: p.program || '',
+    autorizaDatos: p.consent,
+    observaciones: p.notes || '',
+    fechaRegistro: p.created_at.split('T')[0],
+    codigo: p.participant_code || '',
+    estado: p.lifecycle_state === 'active' ? 'activo' : p.lifecycle_state === 'inactive' ? 'inactivo' : 'pendiente',
+  };
+}
 
-export type ParticipantsResponse = {
-  data: Participant[];
-  meta: { page: number; limit: number; offset: number };
-};
+export async function getRegistros(params?: {
+  search?: string
+  departamento?: string
+  funcion?: string
+  estado?: string
+  page?: number
+  limit?: number
+}): Promise<{ data: Registro[]; total: number }> {
+  // Map to our backend params
+  const backendParams: Record<string, string> = {};
+  if (params?.search) backendParams.q = params.search;
+  if (params?.departamento) backendParams.department = params.departamento;
+  if (params?.estado) backendParams.status = params.estado;
+  if (params?.page) backendParams.page = String(params.page);
+  if (params?.limit) backendParams.limit = String(params.limit);
 
-export async function getParticipants(params?: {
-  q?: string;
-  department?: string;
-  status?: string;
-  lifecycleState?: 'active' | 'inactive' | 'all';
-  page?: number;
-  limit?: number;
-}): Promise<ParticipantsResponse> {
+  const query = new URLSearchParams(backendParams).toString();
+  const response = await api.get<{ data: Participant[]; meta: { page: number; limit: number; offset: number } }>(
+    `/api/participants${query ? `?${query}` : ''}`
+  );
+
+  return {
+    data: response.data.map(mapParticipantToRegistro),
+    total: response.meta.page * response.meta.limit, // This is approximate
+  };
+}
+
+export async function getRegistro(id: string): Promise<Registro> {
+  const response = await api.get<{ data: Participant }>(`/api/participants/${id}`);
+  return mapParticipantToRegistro(response.data);
+}
+
+export async function createRegistro(data: Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado'>): Promise<Registro> {
+  // Map Registro to our backend Participant format
+  const backendData = {
+    full_name: data.nombre,
+    document_number: data.dui,
+    birth_date: data.fechaNacimiento,
+    gender: data.genero,
+    phone_country: data.pais,
+    phone_dial_code: data.prefijo,
+    phone_number: data.celular,
+    email: data.correo,
+    address: data.direccion,
+    municipality: data.municipio,
+    department: data.departamento,
+    district: data.distrito,
+    organization: data.entidad,
+    role_function: data.funcion,
+    education_level: data.nivelEducativo,
+    program: data.capacitacion,
+    consent: data.autorizaDatos,
+    notes: data.observaciones,
+  };
+
+  const response = await api.post<{ data: Participant }>('/api/participants', backendData);
+  return mapParticipantToRegistro(response.data);
+}
+
+export async function deleteRegistro(id: string): Promise<void> {
+  await api.delete(`/api/participants`, { id: parseInt(id) });
+}
+
+// ============================
+// CURSOS (Courses mapped to Cursos)
+// ============================
+function mapCourseToCurso(c: Course): Curso {
+  return {
+    id: String(c.id),
+    nombre: c.name,
+    descripcion: c.description,
+    categoria: c.category,
+    nivel: c.level,
+    precio: c.price,
+    precioOriginal: c.price_original ?? undefined,
+    imagen: c.image || '',
+    fechaInicio: c.fecha_inicio,
+    fechaFin: c.fecha_fin,
+    horario: c.horario,
+    ubicacion: c.ubicacion,
+    departamento: c.departamento || '',
+    municipio: c.municipio || '',
+    lat: c.lat ?? undefined,
+    lng: c.lng ?? undefined,
+    cupoMaximo: c.cupo_maximo,
+    inscritos: c.inscritos,
+    instructor: c.instructor,
+    instructorBio: c.instructor_bio || '',
+    estado: mapEstado(c.estado),
+    tags: c.tags || [],
+    fechaRegistro: c.created_at.split('T')[0],
+  };
+}
+
+function mapEstado(estado: string): Curso['estado'] {
+  switch (estado) {
+    case 'active':
+    case 'open':
+      return 'abierto';
+    case 'full':
+      return 'lleno';
+    case 'in_progress':
+      return 'en_curso';
+    case 'finished':
+      return 'finalizado';
+    case 'coming_soon':
+      return 'proximamente';
+    default:
+      return 'abierto';
+  }
+}
+
+function mapEstadoToBackend(estado: string): string {
+  switch (estado) {
+    case 'abierto':
+      return 'enrolling';
+    case 'lleno':
+      return 'in_progress';
+    case 'en_curso':
+      return 'in_progress';
+    case 'finalizado':
+      return 'completed';
+    case 'proximamente':
+      return 'published';
+    default:
+      return 'enrolling';
+  }
+}
+
+// Reverse geocode lat/lng to departamento y municipio via Nominatim (OpenStreetMap)
+export async function reverseGeocode(lat: number, lng: number): Promise<{ departamento: string; municipio: string; ubicacion: string } | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=es`,
+      { headers: { 'Accept-Language': 'es' } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      address?: {
+        state?: string;
+        city?: string;
+        town?: string;
+        village?: string;
+        municipality?: string;
+        county?: string;
+      };
+      display_name?: string;
+    };
+
+    if (!data.address) return null;
+
+    const addr = data.address;
+    // El Salvador states = departamentos
+    const departamento = addr.state ?? addr.county ?? '';
+    // Prefer city/town/village over municipality
+    const municipio = addr.city ?? addr.town ?? addr.village ?? addr.municipality ?? '';
+    const ubicacion = data.display_name ?? `${municipio}, ${departamento}`;
+
+    return { departamento, municipio, ubicacion };
+  } catch {
+    return null;
+  }
+}
+
+export async function getCursos(params?: { categoria?: string; nivel?: string; estado?: string; search?: string }): Promise<Curso[]> {
   const searchParams = new URLSearchParams();
-  if (params?.q) searchParams.set('q', params.q);
-  if (params?.department) searchParams.set('department', params.department);
-  if (params?.status) searchParams.set('status', params.status);
-  if (params?.lifecycleState) searchParams.set('lifecycleState', params.lifecycleState);
-  if (params?.page) searchParams.set('page', String(params.page));
-  if (params?.limit) searchParams.set('limit', String(params.limit));
+  if (params?.categoria) searchParams.set('category', params.categoria);
+  if (params?.nivel) searchParams.set('nivel', params.nivel);
+  if (params?.estado) searchParams.set('estado', params.estado);
+  if (params?.search) searchParams.set('search', params.search);
+  
   const query = searchParams.toString();
-  return api.get<ParticipantsResponse>(`/api/participants${query ? `?${query}` : ''}`);
+  const response = await api.get<{ data: Course[] }>(`/api/courses${query ? `?${query}` : ''}`);
+  return response.data.map(mapCourseToCurso);
 }
 
-export async function createParticipant(data: Record<string, unknown>): Promise<{ data: Participant }> {
-  return api.post<{ data: Participant }>('/api/participants', data);
+export async function getCurso(id: string): Promise<Curso> {
+  const response = await api.get<{ data: Course }>(`/api/courses/${id}`);
+  return mapCourseToCurso(response.data);
 }
 
-export async function patchParticipant(id: number, data: Record<string, unknown>): Promise<{ data: Participant }> {
-  return api.patch<{ data: Participant }>('/api/participants', { id, ...data });
+export async function createCurso(data: Omit<Curso, 'id' | 'inscritos' | 'fechaRegistro'>): Promise<Curso> {
+  const backendData = {
+    name: data.nombre,
+    description: data.descripcion,
+    category: data.categoria,
+    level: data.nivel,
+    price: data.precio,
+    price_original: data.precioOriginal,
+    image: data.imagen,
+    fecha_inicio: data.fechaInicio,
+    fecha_fin: data.fechaFin,
+    horario: data.horario,
+    ubicacion: data.ubicacion,
+    departamento: data.departamento,
+    municipio: data.municipio,
+    lat: data.lat,
+    lng: data.lng,
+    cupo_maximo: data.cupoMaximo,
+    instructor: data.instructor,
+    instructor_bio: data.instructorBio,
+    tags: data.tags,
+    estado: mapEstadoToBackend(data.estado),
+  };
+  
+  const response = await api.post<{ data: Course }>('/api/courses', backendData);
+  return mapCourseToCurso(response.data);
 }
 
-export async function deleteParticipant(id: number): Promise<{ data: Participant }> {
-  return api.delete<{ data: Participant }>('/api/participants', { id });
+export async function updateCurso(id: string, data: Partial<Curso>): Promise<Curso> {
+  const backendData: Record<string, unknown> = {};
+  if (data.nombre) backendData.name = data.nombre;
+  if (data.descripcion) backendData.description = data.descripcion;
+  if (data.categoria) backendData.category = data.categoria;
+  if (data.nivel) backendData.level = data.nivel;
+  if (data.precio !== undefined) backendData.price = data.precio;
+  if (data.precioOriginal !== undefined) backendData.price_original = data.precioOriginal;
+  if (data.imagen) backendData.image = data.imagen;
+  if (data.fechaInicio) backendData.fecha_inicio = data.fechaInicio;
+  if (data.fechaFin) backendData.fecha_fin = data.fechaFin;
+  if (data.horario) backendData.horario = data.horario;
+  if (data.ubicacion) backendData.ubicacion = data.ubicacion;
+  if (data.departamento !== undefined) backendData.departamento = data.departamento;
+  if (data.municipio !== undefined) backendData.municipio = data.municipio;
+  if (data.lat !== undefined) backendData.lat = data.lat;
+  if (data.lng !== undefined) backendData.lng = data.lng;
+  if (data.cupoMaximo) backendData.cupo_maximo = data.cupoMaximo;
+  if (data.instructor) backendData.instructor = data.instructor;
+  if (data.instructorBio !== undefined) backendData.instructor_bio = data.instructorBio;
+  if (data.tags) backendData.tags = data.tags;
+  if (data.estado !== undefined) backendData.estado = mapEstadoToBackend(data.estado);
+  
+  const response = await api.patch<{ data: Course }>(`/api/courses/${id}`, backendData);
+  return mapCourseToCurso(response.data);
 }
 
-// Users API
-export type User = {
-  id: number;
-  email: string;
-  full_name: string;
-  role: string;
-  active: boolean;
-  created_at: string;
-};
-
-export type UsersResponse = {
-  data: User[];
-};
-
-export async function getUsers(): Promise<UsersResponse> {
-  return api.get<UsersResponse>('/api/users');
+export async function deleteCurso(id: string): Promise<void> {
+  await api.delete(`/api/courses/${id}`);
 }
 
-export async function createUser(data: {
-  email: string;
-  password: string;
-  fullName: string;
-  role: string;
-  active: boolean;
-}): Promise<{ data: User }> {
-  return api.post<{ data: User }>('/api/users', data);
+// ============================
+// INSCRIPCIONES A CURSOS
+// ============================
+export async function getInscripciones(cursoId: string): Promise<InscripcionCurso[]> {
+  const response = await api.get<{ data: unknown[] }>(`/api/enrollments?courseId=${cursoId}`);
+  // Map enrollments to InscripcionCurso
+  return response.data.map((e: any) => ({
+    id: String(e.id),
+    cursoId: String(e.course_id),
+    nombre: e.full_name,
+    correo: e.email,
+    telefono: e.phone,
+    dui: e.dui || '',
+    fechaInscripcion: e.fecha_inscripcion,
+    estado: e.estado as 'confirmada' | 'pendiente' | 'cancelada',
+    notas: e.notas || '',
+  }));
 }
 
-export async function patchUser(id: number, data: Record<string, unknown>): Promise<{ data: User }> {
-  return api.patch<{ data: User }>('/api/users', { id, ...data });
+export async function inscribir(data: Omit<InscripcionCurso, 'id' | 'fechaInscripcion' | 'estado'>): Promise<InscripcionCurso> {
+  const response = await api.post<{ data: unknown }>('/api/enrollments', {
+    courseId: parseInt(data.cursoId),
+    fullName: data.nombre,
+    email: data.correo,
+    phone: data.telefono,
+    dui: data.dui,
+    notas: data.notas,
+  });
+  
+  const e = response.data as any;
+  return {
+    id: String(e.id),
+    cursoId: String(e.course_id),
+    nombre: e.full_name,
+    correo: e.email,
+    telefono: e.phone,
+    dui: e.dui || '',
+    fechaInscripcion: e.fecha_inscripcion,
+    estado: 'confirmada',
+    notas: e.notas || '',
+  };
 }
 
-export async function deleteUser(id: number): Promise<{ ok: boolean }> {
-  return api.delete<{ ok: boolean }>('/api/users', { id });
+export async function cancelarInscripcion(id: string): Promise<void> {
+  await api.delete(`/api/enrollments/${id}`);
 }
 
-// Audit API
-export type AuditEvent = {
-  id: number;
-  entity_type: string;
-  entity_id: number;
-  action: string;
-  actor_user_id: number | null;
-  before_data: Record<string, unknown> | null;
-  after_data: Record<string, unknown> | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-};
+// ============================
+// DASHBOARD STATS
+// ============================
+export async function getDashboardStats(): Promise<DashboardStats> {
+  try {
+    // Get participants for stats
+    const participantsRes = await api.get<{ data: Participant[] }>('/api/participants?limit=1000');
+    const participants = participantsRes.data;
+    
+    // Get courses for stats
+    const coursesRes = await api.get<{ data: Course[] }>('/api/courses');
+    const courses = coursesRes.data;
+    
+    // Get enrollments
+    const enrollmentsRes = await api.get<{ data: unknown[] }>('/api/enrollments');
+    const enrollments = enrollmentsRes.data;
+    
+    // Calculate stats
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const registrosSemana = participants.filter(p => new Date(p.created_at) >= weekAgo).length;
+    
+    const facilitadoras = participants.filter(p => p.role_function === 'Facilitadora' || p.role_function === 'facilitadora').length;
+    const participantes = participants.filter(p => p.role_function === 'Participante' || p.role_function === 'participante').length;
+    
+    const cursosActivos = courses.filter(c => c.estado === 'active' || c.estado === 'open').length;
+    
+    // Group by department
+    const porDepartamento: { name: string; value: number }[] = [];
+    const deptMap = new Map<string, number>();
+    participants.forEach(p => {
+      if (p.department) {
+        deptMap.set(p.department, (deptMap.get(p.department) || 0) + 1);
+      }
+    });
+    deptMap.forEach((value, name) => porDepartamento.push({ name, value }));
+    
+    // Group by gender
+    const porGenero: { name: string; value: number }[] = [];
+    const genderMap = new Map<string, number>();
+    participants.forEach(p => {
+      if (p.gender) {
+        genderMap.set(p.gender, (genderMap.get(p.gender) || 0) + 1);
+      }
+    });
+    genderMap.forEach((value, name) => porGenero.push({ name, value }));
+    
+    return {
+      totalRegistros: participants.length,
+      registrosSemana,
+      facilitadoras,
+      participantes,
+      totalCursos: courses.length,
+      cursosActivos,
+      inscripciones: enrollments.length,
+      cuposDisponibles: courses.reduce((sum, c) => sum + Math.max(0, c.cupo_maximo - c.inscritos), 0),
+      porGenero,
+      porDepartamento,
+      porMes: [
+        { mes: 'Ene', cantidad: 0 },
+        { mes: 'Feb', cantidad: 0 },
+        { mes: 'Mar', cantidad: 0 },
+        { mes: 'Abr', cantidad: 0 },
+        { mes: 'May', cantidad: 0 },
+        { mes: 'Jun', cantidad: 0 },
+        { mes: 'Jul', cantidad: 0 },
+      ],
+      cursosPorCategoria: [],
+      inscripcionesPorCurso: [],
+    };
+  } catch {
+    // Return default stats if API fails
+    return {
+      totalRegistros: 0,
+      registrosSemana: 0,
+      facilitadoras: 0,
+      participantes: 0,
+      totalCursos: 0,
+      cursosActivos: 0,
+      inscripciones: 0,
+      cuposDisponibles: 0,
+      porGenero: [],
+      porDepartamento: [],
+      porMes: [],
+      cursosPorCategoria: [],
+      inscripcionesPorCurso: [],
+    };
+  }
+}
 
-export type AuditResponse = {
-  data: AuditEvent[];
-  meta: { total: number; limit: number; offset: number };
-};
-
-export async function getAuditEvents(params?: {
-  entityType?: string;
-  actorUserId?: number;
-  dateFrom?: string;
-  dateTo?: string;
-  limit?: number;
-  offset?: number;
-}): Promise<AuditResponse> {
-  const searchParams = new URLSearchParams();
-  if (params?.entityType) searchParams.set('entityType', params.entityType);
-  if (params?.actorUserId) searchParams.set('actorUserId', String(params.actorUserId));
-  if (params?.dateFrom) searchParams.set('dateFrom', params.dateFrom);
-  if (params?.dateTo) searchParams.set('dateTo', params.dateTo);
-  if (params?.limit) searchParams.set('limit', String(params.limit));
-  if (params?.offset) searchParams.set('offset', String(params.offset));
-  const query = searchParams.toString();
-  return api.get<AuditResponse>(`/api/audit${query ? `?${query}` : ''}`);
+// ============================
+// EXPORT
+// ============================
+export function exportToCSV(registros: Registro[]): void {
+  const data = registros.map(r => ({ Codigo: r.codigo, Nombre: r.nombre, DUI: r.dui, Celular: r.celular, Correo: r.correo, Departamento: r.departamento, Funcion: r.funcion, Fecha: r.fechaRegistro, Estado: r.estado }))
+  const csv = [Object.keys(data[0]).join(','), ...data.map(row => Object.values(row).join(','))].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ACOES_Registros_${new Date().toISOString().split('T')[0]}.csv`
+  a.click()
 }

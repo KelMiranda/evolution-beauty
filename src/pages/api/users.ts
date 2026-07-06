@@ -5,7 +5,7 @@ import { getCurrentUser } from '../../lib/server/auth';
 import { ensureDatabase } from '../../lib/server/bootstrap';
 import { canManageUsers } from '../../lib/server/permissions';
 import { createUser, deactivateUser, listUsers, updateUser } from '../../lib/server/users';
-import { validateUserSubmission } from '../../lib/server/user-schema';
+import { userSubmissionSchema } from '../../lib/server/user-schema';
 
 const patchSchema = z.object({
   id: z.number(),
@@ -68,7 +68,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
-  const parsed = validateUserSubmission(body);
+  const parsed = userSubmissionSchema.safeParse(body);
 
   if (!parsed.success) {
     return new Response(JSON.stringify({ error: 'Datos inválidos', details: parsed.error.flatten() }), {

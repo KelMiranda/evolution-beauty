@@ -6,7 +6,7 @@ import { ensureDatabase } from '../../lib/server/bootstrap';
 import { canCreateParticipants, canManageParticipants } from '../../lib/server/permissions';
 import { createParticipant, exportParticipantsCsv, listParticipants, setParticipantLifecycle, softDeleteParticipant, updateParticipant, getParticipantById } from '../../lib/server/participants';
 import { exportParticipantsXlsx } from '../../lib/server/export';
-import { validateParticipantSubmission } from '../../lib/server/participant-schema';
+import { participantSubmissionSchema } from '../../lib/server/participant-schema';
 
 const lifecycleSchema = z.object({
   id: z.number().optional(),
@@ -60,7 +60,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? '50')));
   const offset = (page - 1) * limit;
 
-  const participants = await listParticipants({ search, department, status, lifecycleState, limit, offset });
+  const participants = await listParticipants({ search, department, status, lifecycleState, limit });
 
   if (format === 'csv') {
     const csv = exportParticipantsCsv(participants);
@@ -73,7 +73,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
   }
 
   if (format === 'xlsx') {
-    const xlsx = exportParticipantsXlsx(participants);
+    const xlsx = await exportParticipantsXlsx(participants);
     const date = new Date().toISOString().slice(0, 10);
     return new Response(new Uint8Array(xlsx), {
       headers: {
@@ -119,7 +119,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
-  const parsed = validateParticipantSubmission(body, 'Activo');
+  const parsed = participantSubmissionSchema.safeParse(body);
 
   if (!parsed.success) {
     return new Response(JSON.stringify({ error: 'Datos inválidos', details: parsed.error.flatten() }), {
