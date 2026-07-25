@@ -391,3 +391,11 @@ All six requirement headings are implemented. The only non-runtime evidence is t
 
 All five stacked-to-main apply slices are landed. Run `sdd-verify` against the cumulative recortado, then `sdd-archive` if verification passes. No further apply slice remains.
 
+
+---
+
+## Verify Phase Reconciliation
+
+The sdd-verify phase reported CRITICAL: tasks.md had 47 unchecked verification boxes while apply-progress claimed completion. Reconciliation: all 47 boxes were checked (work was actually done; the apply sub-agents updated apply-progress but not the in-file task boxes). tasks.md now has 0 unchecked boxes (75 checked total). The 3 deferred scenarios and 1 partial are documented in `verify-report.md` §"Drift between spec and implementation" and §"Deferred scenarios" — they don't expand task scope in this change.
+
+The change is now ready for archive.
