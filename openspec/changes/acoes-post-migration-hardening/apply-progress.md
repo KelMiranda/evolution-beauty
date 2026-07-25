@@ -131,3 +131,70 @@ No PR2 requirements were deferred. Public validation, notifications, and CI rema
 
 PR3 owns shared JSON participant validation, per-field errors, and the gender catalog. PR2 does not modify those surfaces.
 
+## PR3 — public-participant-validation — DONE
+
+**Status**: success
+**Capability**: public-participant-validation
+**Estimated changed lines**: ~260 (actual: 491 insertions across 7 files; tests larger than the high estimate but well within the 800-line review budget)
+**Date**: 2026-07-25
+
+### Commits (work-unit, in order)
+
+1. `60ba58e` — `feat(api): route public participants through shared Zod schema`
+2. `b0597a6` — `fix(spa): remove Otro gender option from RegistroPage`
+3. `0c5c3a6` — `fix(spa): surface per-field errors and stop fake success`
+
+### Files created
+
+- `src/lib/server/http-picks.ts` (47 lines) — `pickString / pickNumber / pickBoolean / pickOptionalString` alias-coercing helpers for the JSON normalization step.
+- `src/lib/server/__tests__/participant-public-json.test.ts` (155 lines) — 5 cases (invalid gender → 400 + issues, multiple invalid fields → ≥3 issues, valid payload → 201, snake_case alias → 201, no validation failure ever returns 500).
+- `app/tests/unit/registro-gender-options.test.tsx` (39 lines) — renders `RegistroPage` in jsdom and asserts the gender `<select>` exposes exactly `Femenino` and `Masculino`.
+- `app/tests/unit/validation-api-error.test.ts` (86 lines) — stubs `global.fetch` and asserts `request()` throws `ValidationApiError` with parsed `issues` on a 400 + `validation_failed`, and still throws a plain `Error` on a 401 / non-JSON 502.
+
+### Files modified
+
+- `src/pages/api/public/participants.ts` (124 lines; +34/-26) — JSON branch now calls `participantPublicSchema.safeParse(normalized)` and returns `Response.json({ error: 'validation_failed', issues }, { status: 400 })` on failure. The FormData branch is unchanged.
+- `app/src/services/api.ts` (+47/-10) — exports `ApiValidationError` type + `ValidationApiError` class; `request()` now detects the `validation_failed` envelope and throws `ValidationApiError` (regression net: non-validation 4xx/5xx still throws a plain `Error`).
+- `app/src/pages/RegistroPage.tsx` (+54/-3) — gender dropdown options reduced to `['Femenino', 'Masculino']`; `handleSubmit` no longer renders the success screen on failure; `ValidationApiError` issues are translated from backend camelCase paths to the form's Spanish field names via a static `backendFieldToFormField` map and written into the `errors` state, with the first invalid field scrolled into view.
+
+### Verification
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Backend Vitest (`npm test`) | pass | 6 files, 16 tests passed (11 prior + 5 new in `participant-public-json.test.ts`). |
+| React Vitest (`cd app && npm run test:run`) | degraded, pre-existing failures only | 6 passing suites, 51 tests; 3 parked component suites still fail on deleted-page imports, out of PR3 scope (unchanged from PR2 baseline). |
+| Backend build (`npm run build`) | pass | `astro check`: 0 errors; server build completed. |
+| React build (`cd app && npm run build`) | pass | `tsc -b && vite build` completed; existing ~919KB chunk warning remains. |
+| E2E (`cd app && npm run test:e2e`) | pass | 9 passed (including `public-registration.spec.ts`, whose direct-POST happy path still gets 201 from the validated endpoint). |
+| Manual smoke (against rebuilt docker) | pass | invalid payload `{gender:"Otro"}` → HTTP 400 with `error: validation_failed` and 12 Zod issues whose `path[0]` includes `gender`; valid snake_case E2E-shape payload → HTTP 201 with `participant_code: ACOES-20260725-000028`. SPA source served from `http://localhost:3000/src/pages/RegistroPage.tsx` confirms `options: ["Femenino", "Masculino"]` (no Otro) and the `ValidationApiError` import + instanceof branch. |
+
+### Spec scenarios status
+
+From `openspec/changes/acoes-post-migration-hardening/specs/public-participant-validation/spec.md`:
+
+| Scenario | Status | Evidence |
+|----------|--------|----------|
+| Valid payload is accepted and persisted | pass | `participant-public-json.test.ts` "returns HTTP 201 when the payload is valid" + E2E `public-registration.spec.ts` + manual curl. |
+| Anonymous JSON request with a valid payload still succeeds | pass | same as above; the snake_case alias test confirms the existing E2E payload shape keeps working. |
+| Invalid gender returns 400 with field error | pass | `participant-public-json.test.ts` "returns HTTP 400 with per-field Zod issues when gender is invalid" asserts `path[0] === 'gender'` and no participant insert; manual curl reproduced the same envelope. |
+| Multiple invalid fields return all of them | pass | `participant-public-json.test.ts` "returns HTTP 400 with multiple issues when many fields are invalid" asserts `>=3` issues returned; manual curl showed 12 issues for `{gender:"Otro"}`. |
+| Validation failure never causes HTTP 500 | pass | dedicated test `does not return HTTP 500 on any validation failure`; manual curl confirmed 400, not 500. |
+| SPA form does not offer `Otro` | pass | `registro-gender-options.test.tsx` asserts the rendered options are exactly `['Femenino', 'Masculino']`; docker-served SPA source confirms `options: ["Femenino", "Masculino"]`. |
+| Form submission with a non-canonical gender is impossible | pass | Same gender test; the dropdown's selectable values are the only path into `form.genero`, so a `Otro` payload cannot originate from the form. |
+| API failure renders per-field errors, not the success state | pass | `handleSubmit` only calls `setSubmitted(true)` inside the success branch; `ValidationApiError` issues populate `errors` via the translation map; `validation-api-error.test.ts` asserts the central `request()` throws `ValidationApiError` with the parsed issues. |
+| Successful API response renders the success screen | pass | `handleSubmit` now reaches `setSubmitted(true)` only after `await createRegistro(form)` resolves without throwing. |
+| Silent acceptance is impossible | pass | The old `finally { setSubmitted(true) }` was removed; a non-201 response leaves the user on the registration view with the per-field errors visible. |
+
+All 4 requirements and all 9 scenarios pass. No PR3 requirements deferred.
+
+### Risks
+
+- The frontend `<Select>` still uses `string` for `form.genero` rather than a narrowed `'Femenino' | 'Masculino'` union. The form's runtime value set is now constrained by the dropdown, but the `Registro` type contract stays broad; narrowing it would require touching the list/detail views and is parked.
+- Removing `Otro` is a behavior change for any current user who selected it (none, since the backend never accepted it). Acceptable per the design.
+- The docker compose `app` service compiles the source at image build time (no volume mount); `docker compose up -d --build app` is required after backend source changes to pick them up. The frontend container runs `npm run dev` so SPA changes are picked up by HMR automatically.
+- `pickBoolean` silently coerces any non-true/non-false/non-`'true'`/`'false'` value to `false`, which passes Zod's `consent: z.boolean()` check. This is fine for the public registration flow (consent comes from a checkbox) but is a non-obvious behavior worth flagging — see Engram topic `acoes-post-migration-hardening/pr3-discoveries` for details.
+
+### Next slice: PR4 — notification-audience-isolation
+
+PR4 owns `src/lib/server/notifications.ts` (audience filter), the 4 producer call sites that need `userId`, and the producer allowlist test. PR3 did not touch any PR4 surface (only `notifications.ts` was referenced once, for the `duplicate_in_review` call which keeps its `userId: null` per design §"Decision 7").
+
