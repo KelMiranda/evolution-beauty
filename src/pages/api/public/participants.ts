@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
 
 import { ensureDatabase } from '../../../lib/server/bootstrap';
-import { createParticipant, findParticipantDuplicates } from '../../../lib/server/participants';
+import { pickBoolean, pickNumber, pickOptionalString, pickString } from '../../../lib/server/http-picks';
 import { createNotification, notificationKinds } from '../../../lib/server/notifications';
-import { validateParticipantSubmission } from '../../../lib/server/participant-schema';
+import { participantPublicSchema, validateParticipantSubmission } from '../../../lib/server/participant-schema';
+import { createParticipant, findParticipantDuplicates } from '../../../lib/server/participants';
 
 export const POST: APIRoute = async ({ request }) => {
   await ensureDatabase();
@@ -36,31 +37,38 @@ export const POST: APIRoute = async ({ request }) => {
     | null = null;
 
   if (contentType.includes('application/json')) {
-    const body = await request.json() as Record<string, unknown>;
-    const pick = (camel: string, snake: string) => body[camel] ?? body[snake];
-    parsedParticipant = {
-      courseId: pick('courseId', 'course_id') !== undefined && pick('courseId', 'course_id') !== null ? Number(pick('courseId', 'course_id')) : undefined,
-      fullName: String(pick('fullName', 'full_name') ?? ''),
-      documentNumber: String(pick('documentNumber', 'document_number') ?? ''),
-      birthDate: String(pick('birthDate', 'birth_date') ?? ''),
-      gender: String(pick('gender', 'gender') ?? ''),
-      phoneCountry: String(pick('phoneCountry', 'phone_country') ?? ''),
-      phoneDialCode: String(pick('phoneDialCode', 'phone_dial_code') ?? ''),
-      phoneNumber: String(pick('phoneNumber', 'phone_number') ?? ''),
-      phone: String(pick('phone', 'phone') ?? ''),
-      email: pick('email', 'email') ? String(pick('email', 'email')) : undefined,
-      address: pick('address', 'address') ? String(pick('address', 'address')) : undefined,
-      municipality: String(pick('municipality', 'municipality') ?? ''),
-      department: String(pick('department', 'department') ?? ''),
-      district: pick('district', 'district') ? String(pick('district', 'district')) : undefined,
-      organization: pick('organization', 'organization') ? String(pick('organization', 'organization')) : undefined,
-      roleFunction: String(pick('roleFunction', 'role_function') ?? ''),
-      educationLevel: pick('educationLevel', 'education_level') ? String(pick('educationLevel', 'education_level')) : undefined,
-      program: pick('program', 'program') ? String(pick('program', 'program')) : undefined,
-      status: String(pick('status', 'status') ?? 'Pendiente'),
-      notes: pick('notes', 'notes') ? String(pick('notes', 'notes')) : undefined,
-      consent: Boolean(pick('consent', 'consent')),
+    const raw = (await request.json()) as Record<string, unknown>;
+    const normalized = {
+      courseId: pickNumber(raw, 'courseId', 'course_id'),
+      fullName: pickString(raw, 'fullName', 'full_name'),
+      documentNumber: pickString(raw, 'documentNumber', 'document_number'),
+      birthDate: pickString(raw, 'birthDate', 'birth_date'),
+      gender: pickString(raw, 'gender', 'gender'),
+      phoneCountry: pickString(raw, 'phoneCountry', 'phone_country'),
+      phoneDialCode: pickString(raw, 'phoneDialCode', 'phone_dial_code'),
+      phoneNumber: pickString(raw, 'phoneNumber', 'phone_number'),
+      phone: pickString(raw, 'phone', 'phone'),
+      email: pickOptionalString(raw, 'email', 'email'),
+      address: pickOptionalString(raw, 'address', 'address'),
+      municipality: pickString(raw, 'municipality', 'municipality'),
+      department: pickString(raw, 'department', 'department'),
+      district: pickOptionalString(raw, 'district', 'district'),
+      organization: pickOptionalString(raw, 'organization', 'organization'),
+      roleFunction: pickString(raw, 'roleFunction', 'role_function'),
+      educationLevel: pickOptionalString(raw, 'educationLevel', 'education_level'),
+      program: pickOptionalString(raw, 'program', 'program'),
+      status: pickString(raw, 'status', 'status') || 'Pendiente',
+      notes: pickOptionalString(raw, 'notes', 'notes'),
+      consent: pickBoolean(raw, 'consent', 'consent'),
     };
+    const parsed = participantPublicSchema.safeParse(normalized);
+    if (!parsed.success) {
+      return Response.json(
+        { error: 'validation_failed', issues: parsed.error.issues },
+        { status: 400 },
+      );
+    }
+    parsedParticipant = parsed.data;
   } else {
     const formData = await request.formData();
     const validated = validateParticipantSubmission(formData, 'Pendiente');
