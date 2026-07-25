@@ -1,0 +1,24 @@
+# openspec/config.yaml
+# Real schema per @fission-ai/openspec src/core/project-config.ts.
+# Unknown keys (project, changeRoot, archiveDir) are silently ignored by the CLI;
+# change root and archive dir are hard-coded to openspec/changes/ and
+# openspec/changes/archive/ respectively (src/core/init.ts:createDirectoryStructure).
+schema: spec-driven
+
+context: |
+  Tech stack: Astro 4 backend (Node 20, port 4321) + React 19 SPA (Vite 7, port 3000)
+  + PostgreSQL 16. Auth via cookie session (bcrypt + sha256 token hash).
+  Auth roles (canonical): admin, facilitador, empleado, participante.
+  Backend tests: Vitest (root vitest.config.ts). App tests: Vitest (app/vitest.config.ts).
+  E2E: Playwright. CI: GitHub Actions. Docker compose with postgres + backend + frontend.
+  No DB migrations in the recortado scope; corrections are read-side.
+
+rules:
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Cite file:line evidence for every claim
+    - Resolve open questions in the design, do not defer to tasks
+  tasks:
+    - Group by capability; each task completable in one session
