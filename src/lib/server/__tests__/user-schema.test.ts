@@ -18,7 +18,7 @@ describe('user schema', () => {
     formData.set('email', 'user@example.com');
     formData.set('password', '12345678');
     formData.set('fullName', '  New User  ');
-    formData.set('role', 'facilitadora');
+    formData.set('role', 'facilitador');
     formData.set('active', 'on');
 
     expect(extractUserSubmission(formData)).toMatchObject({

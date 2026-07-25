@@ -1,6 +1,20 @@
-export const canonicalRoles = ['admin', 'empleado', 'facilitador', 'participante'] as const;
+import { query } from './db';
 
-export type CanonicalRole = (typeof canonicalRoles)[number];
+export const ROLES = ['admin', 'facilitador', 'empleado', 'participante'] as const;
+export const canonicalRoles = ROLES;
+
+export type CanonicalRole = (typeof ROLES)[number];
+
+export class RoleCoercionError extends Error {
+  constructor(public readonly originalRole: string) {
+    super(`Cannot coerce role '${originalRole}' to a canonical role`);
+    this.name = 'RoleCoercionError';
+  }
+}
+
+export function isRole(role: string): role is CanonicalRole {
+  return ROLES.includes(role as CanonicalRole);
+}
 
 export type PermissionKey =
   | 'dashboard:view'
@@ -23,27 +37,32 @@ const permissionMatrix: Record<CanonicalRole, PermissionKey[]> = {
   participante: ['courses:view'],
 };
 
-export function normalizeRole(role: string): CanonicalRole {
+export function canonicalizeRole(role: string): CanonicalRole {
   const normalized = role.trim().toLowerCase();
 
+  if (isRole(normalized)) return normalized;
+
   switch (normalized) {
-    case 'admin':
-      return 'admin';
-    case 'empleado':
     case 'employee':
     case 'operator':
       return 'empleado';
-    case 'facilitador':
-    case 'facilitadora':
     case 'instructor':
       return 'facilitador';
-    case 'participante':
     case 'participant':
     case 'viewer':
       return 'participante';
     default:
-      return 'participante';
+      throw new RoleCoercionError(role);
   }
+}
+
+export const normalizeRole = canonicalizeRole;
+
+export async function countLegacyFacilitadoraRows(): Promise<number> {
+  const result = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM users WHERE role = 'facilitadora'`,
+  );
+  return Number(result.rows[0]?.count ?? '0');
 }
 
 export function hasPermission(user: { role: CanonicalRole } | null, permission: PermissionKey) {
