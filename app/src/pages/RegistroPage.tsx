@@ -216,7 +216,7 @@ export function RegistroPage() {
                   </div>
                   <Field label="Fecha de nacimiento" type="date" value={form.fechaNacimiento} onChange={v => updateField('fechaNacimiento', v)} error={errors.fechaNacimiento} />
                   <div className="grid md:grid-cols-2 gap-5">
-                    <Select label="Género" value={form.genero} onChange={v => updateField('genero', v)} error={errors.genero} options={['Femenino', 'Masculino', 'Otro']} />
+                    <Select label="Género" value={form.genero} onChange={v => updateField('genero', v)} error={errors.genero} options={['Femenino', 'Masculino']} />
                     <Select label="País" value={form.pais} onChange={v => updateField('pais', v)} options={paisesCentroamerica} />
                   </div>
                 </div>
