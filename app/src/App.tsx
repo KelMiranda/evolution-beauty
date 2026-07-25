@@ -1,35 +1,33 @@
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
+import { RoleGuard } from '@/components/RoleGuard'
 import { SmoothScroll } from '@/components/SmoothScroll'
-import { PublicLayout } from '@/layouts/PublicLayout'
 import { DashboardLayout } from '@/layouts/DashboardLayout'
-import { LandingPage } from '@/pages/LandingPage'
-import { RegistroPage } from '@/pages/RegistroPage'
-import { LoginPage } from '@/pages/LoginPage'
-import { DashboardPage } from '@/pages/DashboardPage'
-import { ReportesPage } from '@/pages/ReportesPage'
-import { ConfigPage } from '@/pages/ConfigPage'
-import { CatalogoCursosPage } from '@/pages/CatalogoCursosPage'
-import { CursoDetallePage } from '@/pages/CursoDetallePage'
+import { PublicLayout } from '@/layouts/PublicLayout'
 import { AdminCursosPage } from '@/pages/AdminCursosPage'
+import { CatalogoCursosPage } from '@/pages/CatalogoCursosPage'
+import { ConfigPage } from '@/pages/ConfigPage'
+import { CursoDetallePage } from '@/pages/CursoDetallePage'
+import { DashboardPage } from '@/pages/DashboardPage'
+import { LandingPage } from '@/pages/LandingPage'
+import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import { useAuth } from '@/hooks/useAuth'
+import { RegistroPage } from '@/pages/RegistroPage'
+import { ReportesPage } from '@/pages/ReportesPage'
+import { UnauthorizedPage } from '@/pages/UnauthorizedPage'
+import { getAllowedRoles, type RouteId } from '@/routes/routeManifest'
 
-function ProtectedRoute() {
-  const { isAuthenticated, loading } = useAuth()
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-charcoal">
-      <div className="w-8 h-8 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
-    </div>
+function ProtectedDashboardRoute({ routeId }: { routeId: RouteId }) {
+  return (
+    <RoleGuard allowedRoles={getAllowedRoles(routeId)}>
+      <DashboardLayout />
+    </RoleGuard>
   )
-  if (!isAuthenticated) return <Navigate to="/login" replace />
-  return <Outlet />
 }
 
 export default function App() {
   return (
     <SmoothScroll>
       <Routes>
-        {/* Public routes */}
         <Route element={<PublicLayout />}>
           <Route path="/" element={<LandingPage />} />
           <Route path="/cursos" element={<CatalogoCursosPage />} />
@@ -38,17 +36,23 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
         </Route>
 
-        {/* Dashboard routes */}
-        <Route element={<ProtectedRoute />}>
-          <Route element={<DashboardLayout />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/dashboard/registros" element={<DashboardPage />} />
-            <Route path="/dashboard/cursos" element={<AdminCursosPage />} />
-            <Route path="/dashboard/reportes" element={<ReportesPage />} />
-            <Route path="/dashboard/config" element={<ConfigPage />} />
-          </Route>
+        <Route element={<ProtectedDashboardRoute routeId="/dashboard" />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+        </Route>
+        <Route element={<ProtectedDashboardRoute routeId="/dashboard/registros" />}>
+          <Route path="/dashboard/registros" element={<DashboardPage />} />
+        </Route>
+        <Route element={<ProtectedDashboardRoute routeId="/dashboard/cursos" />}>
+          <Route path="/dashboard/cursos" element={<AdminCursosPage />} />
+        </Route>
+        <Route element={<ProtectedDashboardRoute routeId="/dashboard/reportes" />}>
+          <Route path="/dashboard/reportes" element={<ReportesPage />} />
+        </Route>
+        <Route element={<ProtectedDashboardRoute routeId="/dashboard/config" />}>
+          <Route path="/dashboard/config" element={<ConfigPage />} />
         </Route>
 
+        <Route path="/unauthorized" element={<UnauthorizedPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </SmoothScroll>
