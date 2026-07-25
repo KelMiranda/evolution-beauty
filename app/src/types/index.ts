@@ -25,11 +25,13 @@ export interface Registro {
   estado: 'activo' | 'pendiente' | 'inactivo'
 }
 
+export type Role = 'admin' | 'facilitador' | 'empleado' | 'participante'
+
 export interface User {
   id: string
   nombre: string
   correo: string
-  rol: 'admin' | 'operador' | 'participante'
+  rol: Role
 }
 
 export interface Curso {

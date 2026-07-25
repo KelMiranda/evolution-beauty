@@ -55,7 +55,7 @@ export const userInputSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   fullName: z.string().min(2).max(200),
-  role: z.enum(['admin', 'facilitadora', 'participante']),
+  role: z.enum(['admin', 'facilitador', 'empleado', 'participante']),
   active: z.boolean(),
 });
 
@@ -276,7 +276,7 @@ describe('Zod Schema Validation', () => {
     });
 
     it('accepts all valid roles', () => {
-      const roles = ['admin', 'facilitadora', 'participante'] as const;
+      const roles = ['admin', 'facilitador', 'empleado', 'participante'] as const;
       for (const role of roles) {
         const result = userInputSchema.safeParse({ ...validUser, role });
         expect(result.success).toBe(true);

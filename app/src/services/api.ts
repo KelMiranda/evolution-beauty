@@ -85,7 +85,7 @@ export async function login(credentials: LoginCredentials): Promise<{ user: User
     id: String(response.user.id),
     nombre: response.user.full_name,
     correo: response.user.email,
-    rol: response.user.role === 'facilitadora' ? 'operador' : response.user.role,
+    rol: response.user.role,
   };
   
   return { user: mappedUser, token: 'session' };
@@ -100,7 +100,7 @@ export async function getCurrentUser(): Promise<User | null> {
       id: String(response.user.id),
       nombre: response.user.full_name,
       correo: response.user.email,
-      rol: response.user.role === 'facilitadora' ? 'operador' : response.user.role,
+      rol: response.user.role,
     };
     
     return mappedUser;

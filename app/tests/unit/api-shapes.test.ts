@@ -30,12 +30,12 @@ describe('API Response Shapes', () => {
       expect(user.id).toBeDefined();
       expect(user.email).toBeDefined();
       expect(user.full_name).toBeDefined();
-      expect(user.role).toMatch(/^(admin|facilitadora|participante)$/);
+      expect(user.role).toMatch(/^(admin|facilitador|empleado|participante)$/);
       expect(typeof user.active).toBe('boolean');
     });
 
     it('role is one of allowed values', () => {
-      const roles: AuthUser['role'][] = ['admin', 'facilitadora', 'participante'];
+      const roles: AuthUser['role'][] = ['admin', 'facilitador', 'empleado', 'participante'];
       roles.forEach((role) => {
         const user: AuthUser = {
           id: 1,
@@ -44,7 +44,7 @@ describe('API Response Shapes', () => {
           role,
           active: true,
         };
-        expect(['admin', 'facilitadora', 'participante']).toContain(user.role);
+        expect(['admin', 'facilitador', 'empleado', 'participante']).toContain(user.role);
       });
     });
   });

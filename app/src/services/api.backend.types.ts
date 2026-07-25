@@ -1,9 +1,11 @@
 // Our actual backend types (snake_case)
+export type Role = 'admin' | 'facilitador' | 'empleado' | 'participante';
+
 export type AuthUser = {
   id: number;
   email: string;
   full_name: string;
-  role: 'admin' | 'facilitadora' | 'participante';
+  role: Role;
   active: boolean;
 };
 

@@ -25,5 +25,5 @@ export function useAuth() {
     setUser(null)
   }, [])
 
-  return { user, loading, login, logout, isAuthenticated: !!user }
+  return { user, role: user?.rol ?? null, loading, login, logout, isAuthenticated: !!user }
 }

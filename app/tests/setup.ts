@@ -19,7 +19,7 @@ export function mockSession(user?: {
   id: number;
   email: string;
   full_name: string;
-  role: 'admin' | 'facilitadora' | 'participante';
+  role: 'admin' | 'facilitador' | 'empleado' | 'participante';
   active: boolean;
 } | null) {
   if (user) {
