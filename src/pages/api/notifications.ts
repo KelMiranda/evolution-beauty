@@ -9,5 +9,5 @@ export const GET: APIRoute = async ({ cookies }) => {
   const user = await getCurrentUser(cookies);
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  return Response.json({ data: await listNotifications(user.id) });
+  return Response.json({ data: await listNotifications(user.id, user.role) });
 };

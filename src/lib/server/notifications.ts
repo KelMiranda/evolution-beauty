@@ -1,4 +1,5 @@
 import { query, withTransaction } from './db';
+import type { CanonicalRole } from './permissions';
 
 export const notificationKinds = {
   facilitatorPending: 'facilitator_pending_validation',
@@ -9,6 +10,14 @@ export const notificationKinds = {
 } as const;
 
 export type NotificationKind = (typeof notificationKinds)[keyof typeof notificationKinds];
+
+export const producerAudienceMap = {
+  [notificationKinds.facilitatorPending]: 'admin',
+  [notificationKinds.participantEnrolled]: 'admin',
+  [notificationKinds.courseFull]: 'admin',
+  [notificationKinds.duplicateInReview]: 'admin',
+  [notificationKinds.courseCompleted]: 'admin',
+} as const satisfies Record<NotificationKind, CanonicalRole>;
 
 export type NotificationRow = {
   id: number;
@@ -24,7 +33,7 @@ export type NotificationRow = {
 
 export type NotificationInput = {
   userId?: number | null;
-  audienceRole?: string | null;
+  audienceRole?: CanonicalRole | null;
   kind: NotificationKind;
   title: string;
   body: string;
@@ -42,25 +51,30 @@ export async function createNotification(input: NotificationInput) {
   return result.rows[0] ?? null;
 }
 
-export async function listNotifications(userId: number, limit = 50) {
+export async function listNotifications(userId: number, callerRole: CanonicalRole, limit = 50) {
   const result = await query<NotificationRow>(
     `SELECT * FROM notifications
-     WHERE (user_id = $1 OR audience_role IS NOT NULL)
+     WHERE (user_id = $1
+            OR audience_role = $2
+            OR (user_id IS NULL AND audience_role IS NULL))
      ORDER BY read_at IS NULL DESC, created_at DESC, id DESC
-     LIMIT $2`,
-    [userId, limit],
+     LIMIT $3`,
+    [userId, callerRole, limit],
   );
 
   return result.rows;
 }
 
-export async function markNotificationRead(id: number, userId: number) {
+export async function markNotificationRead(id: number, userId: number, callerRole: CanonicalRole) {
   const result = await query<NotificationRow>(
     `UPDATE notifications
      SET read_at = NOW()
-     WHERE id = $1 AND (user_id = $2 OR audience_role IS NOT NULL)
+     WHERE id = $1
+       AND (user_id = $2
+            OR audience_role = $3
+            OR (user_id IS NULL AND audience_role IS NULL))
      RETURNING *`,
-    [id, userId],
+    [id, userId, callerRole],
   );
 
   return result.rows[0] ?? null;

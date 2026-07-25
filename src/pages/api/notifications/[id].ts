@@ -12,7 +12,7 @@ export const PATCH: APIRoute = async ({ params, cookies }) => {
   const id = Number(params.id);
   if (!Number.isFinite(id)) return Response.json({ error: 'Invalid notification id' }, { status: 400 });
 
-  const notification = await markNotificationRead(id, user.id);
+  const notification = await markNotificationRead(id, user.id, user.role);
   if (!notification) return Response.json({ error: 'Not found' }, { status: 404 });
 
   return Response.json({ data: notification });
