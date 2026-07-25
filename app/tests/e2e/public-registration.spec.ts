@@ -42,7 +42,7 @@ test.describe('Public registration flow', () => {
     await expect(page.getByLabel('Curso')).toHaveValue(/\d+/)
     await expect(page.locator('input[name="autorizaDatos"]')).toBeChecked()
 
-    const response = await page.request.post('http://localhost:4322/api/public/participants', {
+    const response = await page.request.post('http://localhost:4321/api/public/participants', {
       headers: { 'Content-Type': 'application/json' },
       data: JSON.stringify({
         courseId: 9,
