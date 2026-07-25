@@ -6,12 +6,35 @@ import type { Registro, User, Curso, InscripcionCurso, DashboardStats, LoginCred
 // Import our backend types for mapping
 import type { AuthUser, BackendUser, Participant, Course, ParticipantHistoryEntry, CoursePublicLink, PublicEnrollmentLink } from './api.backend.types'
 
-function getErrorMessage(response: Response): string {
+/**
+ * Shape of the `validation_failed` envelope the backend returns on a Zod
+ * rejection (HTTP 400) from endpoints that route through the shared
+ * participant schema.
+ */
+export type ApiValidationError = {
+  error: 'validation_failed';
+  issues: Array<{ path: (string | number)[]; message: string; code: string }>;
+};
+
+/**
+ * Thrown by the central request() when the backend rejects a payload with a
+ * 400 + `validation_failed` envelope. Carries the parsed Zod issues so the
+ * caller can render per-field errors.
+ */
+export class ValidationApiError extends Error {
+  public issues: ApiValidationError['issues'];
+  constructor(issues: ApiValidationError['issues']) {
+    super('validation_failed');
+    this.name = 'ValidationApiError';
+    this.issues = issues;
+  }
+}
+
+async function parseErrorBody(response: Response): Promise<unknown> {
   try {
-    const data = response.json() as unknown as { error: string };
-    return data.error ?? 'Unknown error';
+    return await response.json();
   } catch {
-    return response.statusText;
+    return null;
   }
 }
 
@@ -33,8 +56,20 @@ async function request<T>(
   });
 
   if (!response.ok) {
-    const errorMessage = getErrorMessage(response);
-    throw new Error(errorMessage);
+    const body = await parseErrorBody(response);
+    if (
+      body &&
+      typeof body === 'object' &&
+      (body as { error?: string }).error === 'validation_failed' &&
+      Array.isArray((body as ApiValidationError).issues)
+    ) {
+      throw new ValidationApiError((body as ApiValidationError).issues);
+    }
+    const fallback =
+      (body && typeof body === 'object' && typeof (body as { error?: unknown }).error === 'string'
+        ? (body as { error: string }).error
+        : response.statusText) || 'Unknown error';
+    throw new Error(fallback);
   }
 
   // Handle empty responses

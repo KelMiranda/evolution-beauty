@@ -1,9 +1,38 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, ChevronRight, ChevronLeft, CheckCircle2, User, Phone, BookOpen } from 'lucide-react'
-import { createRegistro, getCursos } from '@/services/api'
+import { createRegistro, getCursos, ValidationApiError } from '@/services/api'
 import { departamentosElSalvador, municipiosPorDepartamento, funcionesACOES, nivelesEducativos, paisesCentroamerica } from '@/data/mockData'
 import type { Registro } from '@/types'
+
+/**
+ * Maps the shared Zod schema's camelCase field names (returned in the
+ * 400 validation_failed envelope) to the RegistroPage form field names
+ * used in the `errors` state.
+ */
+const backendFieldToFormField: Record<string, string> = {
+  courseId: 'courseId',
+  fullName: 'nombre',
+  documentNumber: 'dui',
+  birthDate: 'fechaNacimiento',
+  gender: 'genero',
+  phoneCountry: 'pais',
+  phoneDialCode: 'prefijo',
+  phoneNumber: 'celular',
+  phone: 'celular',
+  email: 'correo',
+  address: 'direccion',
+  municipality: 'municipio',
+  department: 'departamento',
+  district: 'distrito',
+  organization: 'entidad',
+  roleFunction: 'funcion',
+  educationLevel: 'nivelEducativo',
+  program: 'capacitacion',
+  status: 'estado',
+  notes: 'observaciones',
+  consent: 'autorizaDatos',
+}
 
 const steps = [
   { num: 1, title: 'Datos Personales', icon: User },
@@ -80,12 +109,30 @@ export function RegistroPage() {
     try {
       const result = await createRegistro(form)
       setNewRegistro(result)
+      setSubmitted(true)
     } catch (err) {
       console.error(err)
+      if (err instanceof ValidationApiError) {
+        const fieldErrors: Record<string, string> = {}
+        for (const issue of err.issues) {
+          const backendField = String(issue.path[0] ?? '')
+          const formField = backendFieldToFormField[backendField] ?? backendField
+          if (!fieldErrors[formField]) {
+            fieldErrors[formField] = issue.message
+          }
+        }
+        setErrors(fieldErrors)
+        const firstField = Object.keys(fieldErrors)[0]
+        if (firstField) {
+          setStep(1)
+          window.requestAnimationFrame(() => {
+            const el = document.querySelector<HTMLElement>(`[name="${firstField}"]`)
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          })
+        }
+        return
+      }
       setSubmissionError('No se pudo completar el registro')
-    }
-    finally {
-      setSubmitted(true)
     }
   }
 
