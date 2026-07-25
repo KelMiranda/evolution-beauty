@@ -29,16 +29,43 @@ export const POST: APIRoute = async ({ params, cookies }) => {
   }
 
   const token = course.public_enrollment_token ?? generateCourseEnrollmentToken(course.id, course.instructor);
-  const result = await query<{ public_enrollment_token: string }>(
-    'UPDATE courses SET public_enrollment_token = $2, updated_at = NOW() WHERE id = $1 RETURNING public_enrollment_token',
-    [course.id, token],
-  );
 
-  const publicToken = result.rows[0]?.public_enrollment_token ?? token;
-  const publicUrl = new URL(`/cursos/${course.id}`, process.env.PUBLIC_SITE_URL ?? 'http://localhost:4321');
-  publicUrl.searchParams.set('token', publicToken);
+  let publicToken: string;
+  try {
+    const result = await query<{ public_enrollment_token: string }>(
+      'UPDATE courses SET public_enrollment_token = $2, updated_at = NOW() WHERE id = $1 RETURNING public_enrollment_token',
+      [course.id, token],
+    );
+    publicToken = result.rows[0]?.public_enrollment_token ?? token;
+  } catch (error) {
+    console.error('[public-link] failed to persist public enrollment token', {
+      courseId: course.id,
+      reason: error instanceof Error ? error.message : 'unknown',
+    });
+    return new Response(JSON.stringify({ error: 'Failed to generate public enrollment token' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
-  return new Response(JSON.stringify({ data: { token: publicToken, publicUrl: publicUrl.toString() } }), {
+  // Defensive: token should never be empty, but reject if it is so we never
+  // return a URL that would let an end-user self-enroll without an identifier.
+  if (!publicToken) {
+    console.error('[public-link] generated public enrollment token was empty', { courseId: course.id });
+    return new Response(JSON.stringify({ error: 'Failed to generate public enrollment token' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // The SPA uses HashRouter (see app/src/main.tsx), so the route must live
+  // after the '#' fragment. The base URL is the SPA's user-facing origin,
+  // NOT the backend — see docs/architecture.md for rationale.
+  const spaBase = (process.env.PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+  const search = new URLSearchParams({ token: publicToken });
+  const publicUrl = `${spaBase}/#/cursos/${course.id}?${search.toString()}`;
+
+  return new Response(JSON.stringify({ data: { token: publicToken, publicUrl } }), {
     headers: { 'Content-Type': 'application/json' },
   });
 };
