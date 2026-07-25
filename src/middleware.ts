@@ -6,7 +6,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   if (!url.pathname.startsWith('/api')) {
     const reactAppUrl = import.meta.env.REACT_APP_URL || 'http://localhost:3000';
-    return Response.redirect(new URL(url.pathname + url.search + url.hash, reactAppUrl), 302);
+    // The SPA uses HashRouter (see app/src/main.tsx), so the route must live
+    // after the '#' fragment. Prepend '#' before the path so the SPA can
+    // resolve it. If the request URL already has a fragment, preserve it
+    // instead of double-adding the '#' separator.
+    const redirectUrl = url.hash
+      ? new URL(`${url.pathname}${url.search}${url.hash}`, reactAppUrl).toString()
+      : new URL(`#${url.pathname}${url.search}`, reactAppUrl).toString();
+    return Response.redirect(redirectUrl, 302);
   }
 
   if (context.request.method === 'OPTIONS') {
