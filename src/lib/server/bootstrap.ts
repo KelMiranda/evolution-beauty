@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 
 import { query } from './db';
-import { canonicalRoles, normalizeRole } from './permissions';
+import { canonicalRoles, countLegacyFacilitadoraRows } from './permissions';
 
 let bootstrapped = false;
 let bootstrapPromise: Promise<void> | null = null;
@@ -191,7 +191,8 @@ async function createTables() {
     );
 
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'empleado', 'facilitador', 'participante'));
+    ALTER TABLE users ADD CONSTRAINT users_role_check
+      CHECK (role IN ('admin', 'empleado', 'facilitador', 'participante')) NOT VALID;
 
     ALTER TABLE participants DROP CONSTRAINT IF EXISTS participants_lifecycle_state_check;
     ALTER TABLE participants ADD CONSTRAINT participants_lifecycle_state_check CHECK (lifecycle_state IN ('active', 'inactive'));
@@ -232,8 +233,15 @@ async function createTables() {
     CREATE INDEX IF NOT EXISTS course_certificates_course_idx ON course_certificates (course_id, participant_id);
   `);
 
-  await query(`UPDATE users SET role = CASE role WHEN 'operator' THEN 'empleado' WHEN 'facilitadora' THEN 'facilitador' WHEN 'viewer' THEN 'participante' ELSE role END`);
-  await query(`UPDATE users SET role = $1 WHERE role NOT IN ('admin', 'empleado', 'facilitador', 'participante')`, [normalizeRole('participante')]);
+  await query(`UPDATE users SET role = CASE role WHEN 'operator' THEN 'empleado' WHEN 'viewer' THEN 'participante' ELSE role END`);
+
+  const driftCount = await countLegacyFacilitadoraRows();
+  if (driftCount > 0) {
+    console.warn(
+      `[role-drift] ${driftCount} users still carry role='facilitadora'. Surface via GET /api/admin/role-drift.`,
+    );
+  }
+
   await query(`UPDATE participants SET phone = COALESCE(phone, phone_dial_code || ' ' || phone_number) WHERE phone IS NULL OR phone = ''`);
 }
 

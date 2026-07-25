@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 
 import { ensureDatabase } from './bootstrap';
 import { query } from './db';
-import { normalizeRole, type CanonicalRole } from './permissions';
+import { normalizeRole, RoleCoercionError, type CanonicalRole } from './permissions';
 
 const COOKIE_NAME = 'acoes_session';
 const SESSION_DAYS = 7;
@@ -21,6 +21,18 @@ export type AuthUser = {
   role: CanonicalRole;
   active: boolean;
 };
+
+function canonicalRoleOrNull(role: string): CanonicalRole | null {
+  try {
+    return normalizeRole(role);
+  } catch (error) {
+    if (error instanceof RoleCoercionError) {
+      console.warn(`[role-drift] User role '${error.originalRole}' is not canonical.`);
+      return null;
+    }
+    throw error;
+  }
+}
 
 function hashToken(token: string) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -56,11 +68,14 @@ export async function loginUser(email: string, password: string) {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return null;
 
+  const role = canonicalRoleOrNull(user.role);
+  if (!role) return null;
+
   return {
     id: user.id,
     email: user.email,
     full_name: user.full_name,
-    role: normalizeRole(user.role),
+    role,
     active: user.active,
   } satisfies AuthUser;
 }
@@ -103,9 +118,12 @@ export async function getCurrentUser(cookies: CookieStore): Promise<AuthUser | n
   const row = result.rows[0];
   if (!row) return null;
 
+  const role = canonicalRoleOrNull(row.role);
+  if (!role) return null;
+
   return {
     ...row,
-    role: normalizeRole(row.role),
+    role,
   } satisfies AuthUser;
 }
 
