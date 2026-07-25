@@ -1,25 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
-import CoursesCatalogPage from '@/pages/courses/index';
-
-// ─── MSW Server Setup ─────────────────────────────────────────────────────────
-
-export const server = setupServer();
+import { server } from '../setup';
+// Rewired from the deleted Astro catalog route to the active React SPA equivalent.
+import { CatalogoCursosPage } from '@/pages/CatalogoCursosPage';
 
 beforeEach(() => {
-  server.listen({ onUnhandledRequest: 'warn' });
-});
-
-afterEach(() => {
-  server.resetHandlers();
-});
-
-afterAll(() => {
-  server.close();
+  server.use(
+    http.get('/api/courses', () => HttpResponse.json({ data: [] })),
+    http.get('/api/users', () => HttpResponse.json({ data: [] }))
+  );
 });
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
@@ -77,15 +68,15 @@ const mockCourses = [
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
-describe('CoursesCatalogPage', () => {
+describe('CatalogoCursosPage', () => {
   it('renders course catalog page', () => {
     render(
       <MemoryRouter>
-        <CoursesCatalogPage />
+        <CatalogoCursosPage />
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/formación de excelencia/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /formación de excelencia/i })).toBeInTheDocument();
   });
 
   it('renders course cards when data loads', async () => {
@@ -99,7 +90,7 @@ describe('CoursesCatalogPage', () => {
 
     render(
       <MemoryRouter>
-        <CoursesCatalogPage />
+        <CatalogoCursosPage />
       </MemoryRouter>
     );
 
@@ -121,7 +112,7 @@ describe('CoursesCatalogPage', () => {
 
     render(
       <MemoryRouter>
-        <CoursesCatalogPage />
+        <CatalogoCursosPage />
       </MemoryRouter>
     );
 
@@ -141,7 +132,7 @@ describe('CoursesCatalogPage', () => {
 
     render(
       <MemoryRouter>
-        <CoursesCatalogPage />
+        <CatalogoCursosPage />
       </MemoryRouter>
     );
 
@@ -161,7 +152,7 @@ describe('CoursesCatalogPage', () => {
 
     render(
       <MemoryRouter>
-        <CoursesCatalogPage />
+        <CatalogoCursosPage />
       </MemoryRouter>
     );
 
@@ -173,20 +164,22 @@ describe('CoursesCatalogPage', () => {
   it('has search input', async () => {
     render(
       <MemoryRouter>
-        <CoursesCatalogPage />
+        <CatalogoCursosPage />
       </MemoryRouter>
     );
 
+    await screen.findByText(/no se encontraron cursos/i);
     expect(screen.getByPlaceholderText(/buscar cursos/i)).toBeInTheDocument();
   });
 
   it('has category filter buttons', async () => {
     render(
       <MemoryRouter>
-        <CoursesCatalogPage />
+        <CatalogoCursosPage />
       </MemoryRouter>
     );
 
+    await screen.findByText(/no se encontraron cursos/i);
     expect(screen.getByRole('button', { name: 'Colorimetría' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Corte' })).toBeInTheDocument();
   });
@@ -194,10 +187,11 @@ describe('CoursesCatalogPage', () => {
   it('has level filter buttons', async () => {
     render(
       <MemoryRouter>
-        <CoursesCatalogPage />
+        <CatalogoCursosPage />
       </MemoryRouter>
     );
 
+    await screen.findByText(/no se encontraron cursos/i);
     expect(screen.getByRole('button', { name: 'Básico' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Intermedio' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Avanzado' })).toBeInTheDocument();

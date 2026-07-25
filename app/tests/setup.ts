@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { afterAll, afterEach, beforeAll } from 'vitest';
+import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -8,6 +8,27 @@ import { setupServer } from 'msw/node';
 // ─── Test Utilities ──────────────────────────────────────────────────────────
 
 export { userEvent };
+
+// React pages register GSAP ScrollTrigger at import time; jsdom does not
+// implement matchMedia, so component suites need the browser contract stubbed.
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
+Object.defineProperty(window, 'scrollTo', {
+  writable: true,
+  value: vi.fn(),
+});
 
 export function renderWithRouter(ui: React.ReactElement) {
   // Lazy import to avoid circular deps

@@ -25,6 +25,8 @@ export default defineConfig({
         'tests/**',
       ],
     },
+    // The Astro-only AdminParticipantsPage suite was removed because the SPA has
+    // no equivalent route; restore its coverage when React parity is implemented.
     include: ['tests/**/*.test.{ts,tsx}'],
   },
   resolve: {
