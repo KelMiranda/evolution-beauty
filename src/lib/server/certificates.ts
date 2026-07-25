@@ -65,6 +65,7 @@ export async function completeCourse(courseId: number, completedBy: number | nul
     }
 
     await createNotification({
+      userId: completedBy,
       audienceRole: 'admin',
       kind: notificationKinds.courseCompleted,
       title: 'Curso completado',

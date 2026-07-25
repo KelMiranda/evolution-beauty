@@ -213,6 +213,7 @@ export async function createCourse(input: CourseInput, createdBy: number | null)
 
     if (course.cupo_maximo <= course.inscritos) {
       await createNotification({
+        userId: createdBy,
         audienceRole: 'admin',
         kind: notificationKinds.courseFull,
         title: 'Curso lleno',

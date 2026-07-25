@@ -150,6 +150,7 @@ export async function createEnrollment(input: EnrollmentInput) {
     });
 
     await createNotification({
+      userId: input.enrolledBy,
       audienceRole: 'admin',
       kind: notificationKinds.participantEnrolled,
       title: 'Participante inscrito',

@@ -294,6 +294,7 @@ export async function createParticipant(input: ParticipantInput, createdBy: numb
 
     if (input.roleFunction === 'Facilitador' || input.status === 'Pendiente' || input.status === 'Revisar') {
       await createNotification({
+        userId: createdBy,
         audienceRole: 'admin',
         kind: notificationKinds.facilitatorPending,
         title: 'Facilitador pendiente de validación',
