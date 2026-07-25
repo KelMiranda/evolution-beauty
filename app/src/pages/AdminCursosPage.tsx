@@ -6,12 +6,13 @@ import {
 } from 'lucide-react'
 import type { Curso } from '@/types'
 import { elSalvadorDepartments, municipalitiesByDepartment } from '@/lib/geo'
+import { getFacilitatorsCached, resolveFacilitatorName } from '@/lib/facilitators'
 
 const emptyCurso: Omit<Curso, 'id' | 'inscritos' | 'fechaRegistro'> = {
   nombre: '', descripcion: '', categoria: 'Colorimetría', nivel: 'Básico',
   precio: 0, imagen: '', fechaInicio: '', fechaFin: '', horario: '',
   ubicacion: '', departamento: '', municipio: '', lat: 0, lng: 0, cupoMaximo: 20, instructor: '',
-  instructorBio: '', estado: 'abierto', tags: [],
+  instructorBio: '', estado: 'abierto', tags: [], facilitadorId: '',
 }
 
 export function AdminCursosPage() {
@@ -27,8 +28,10 @@ export function AdminCursosPage() {
   const [loadingGeo, setLoadingGeo] = useState(false)
   const [latInput, setLatInput] = useState('')
   const [lngInput, setLngInput] = useState('')
+  const [facilitators, setFacilitators] = useState<Array<{ id: string; name: string }>>([])
 
   useEffect(() => { load() }, [search])
+  useEffect(() => { getFacilitatorsCached().then(setFacilitators).catch(() => setFacilitators([])) }, [])
 
   const load = async () => {
     setLoading(true)
@@ -57,6 +60,7 @@ export function AdminCursosPage() {
       horario: curso.horario, ubicacion: curso.ubicacion, departamento: curso.departamento,
       municipio: curso.municipio, lat: curso.lat, lng: curso.lng,
       cupoMaximo: curso.cupoMaximo, instructor: curso.instructor, instructorBio: curso.instructorBio,
+      facilitadorId: curso.facilitadorId ?? '',
       estado: curso.estado, tags: [...curso.tags],
     })
     setTagInput('')
@@ -163,6 +167,7 @@ export function AdminCursosPage() {
               <tr className="border-b border-warm-tan/10">
                 <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray">Curso</th>
                 <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray hidden md:table-cell">Categoría</th>
+                <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray hidden lg:table-cell">Facilitador</th>
                 <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray">Cupos</th>
                 <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray hidden sm:table-cell">Precio</th>
                 <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray">Estado</th>
@@ -172,10 +177,10 @@ export function AdminCursosPage() {
             <tbody>
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i} className="border-b border-warm-tan/5"><td colSpan={6} className="px-4 py-4"><div className="h-3 bg-warm-tan/10 rounded animate-pulse" /></td></tr>
+                  <tr key={i} className="border-b border-warm-tan/5"><td colSpan={7} className="px-4 py-4"><div className="h-3 bg-warm-tan/10 rounded animate-pulse" /></td></tr>
                 ))
               ) : cursos.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-warm-gray">No hay cursos</td></tr>
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-warm-gray">No hay cursos</td></tr>
               ) : (
                 cursos.map(c => (
                   <tr key={c.id} className="border-b border-warm-tan/5 hover:bg-charcoal/30 transition-colors">
@@ -185,6 +190,9 @@ export function AdminCursosPage() {
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       <span className="text-xs text-gold">{c.categoria}</span>
+                    </td>
+                    <td className="px-4 py-3 hidden lg:table-cell">
+                      <span className="text-xs text-ivory">{resolveFacilitatorName(c.facilitadorId, facilitators) || '—'}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs ${c.cupoMaximo - c.inscritos <= 3 ? 'text-error' : 'text-ivory'}`}>
@@ -230,6 +238,7 @@ export function AdminCursosPage() {
                   <Field label="Nombre" value={form.nombre} onChange={v => setForm(p => ({ ...p, nombre: v }))} required />
                   <Field label="Categoría" value={form.categoria} onChange={v => setForm(p => ({ ...p, categoria: v }))} select options={['Colorimetría', 'Corte', 'Manicure', 'Maquillaje', 'Tratamientos', 'Barbería', 'Estilismo', 'Spa']} />
                 </div>
+                <Field label="Facilitador" value={form.facilitadorId || ''} onChange={v => setForm(p => ({ ...p, facilitadorId: v }))} select options={['', ...facilitators.map(f => `${f.id}|${f.name}`)]} />
                 <Field label="Descripción" value={form.descripcion} onChange={v => setForm(p => ({ ...p, descripcion: v }))} textarea />
                 <div className="grid md:grid-cols-2 gap-4">
                   <Field label="Nivel" value={form.nivel} onChange={v => setForm(p => ({ ...p, nivel: v }))} select options={['Básico', 'Intermedio', 'Avanzado']} />
@@ -386,7 +395,10 @@ function Field({ label, value, onChange, type = 'text', textarea, select, option
         <textarea value={value} onChange={e => onChange(e.target.value)} rows={3} className="mt-1.5 w-full px-4 py-2.5 bg-charcoal border border-warm-tan/20 rounded-lg text-sm text-ivory placeholder:text-warm-gray focus:outline-none focus:border-gold/50 resize-none" />
       ) : select ? (
         <select value={value} onChange={e => onChange(e.target.value)} className="mt-1.5 w-full px-4 py-2.5 bg-charcoal border border-warm-tan/20 rounded-lg text-sm text-ivory focus:outline-none focus:border-gold/50 appearance-none">
-          {options?.map(o => <option key={o} value={o}>{o}</option>)}
+          {options?.map(o => {
+            const [rawValue, rawLabel] = o.includes('|') ? o.split('|', 2) : [o, o]
+            return <option key={rawValue || rawLabel} value={rawValue}>{rawLabel || rawValue || '—'}</option>
+          })}
         </select>
       ) : (
         <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="mt-1.5 w-full px-4 py-2.5 bg-charcoal border border-warm-tan/20 rounded-lg text-sm text-ivory placeholder:text-warm-gray focus:outline-none focus:border-gold/50" />

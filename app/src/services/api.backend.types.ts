@@ -7,9 +7,20 @@ export type AuthUser = {
   active: boolean;
 };
 
+export type BackendUser = {
+  id: number;
+  email: string;
+  full_name: string;
+  role: string;
+  active: boolean;
+  created_at: string;
+};
+
 export type Participant = {
   id: number;
   participant_code: string;
+  course_id: number | null;
+  facilitator_id: number | null;
   full_name: string;
   document_number: string;
   birth_date: string;
@@ -39,12 +50,23 @@ export type Participant = {
   updated_at: string;
 };
 
+export type ParticipantHistoryEntry = {
+  id: number;
+  action: string;
+  actor_user_id: number | null;
+  before_data: Record<string, unknown> | null;
+  after_data: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
 export type Course = {
   id: number;
   name: string;
   description: string;
   category: string;
   level: string;
+  facilitator_id: number | null;
   instructor: string;
   instructor_bio: string | null;
   price: number;
@@ -62,6 +84,26 @@ export type Course = {
   inscritos: number;
   estado: string;
   tags: string[] | null;
+  public_enrollment_token: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type CoursePublicLink = {
+  token: string;
+  publicUrl: string;
+};
+
+export type PublicEnrollmentCourse = {
+  id: number;
+  name: string;
+  instructor: string;
+  estado: string;
+  cupo_maximo: number;
+  inscritos: number;
+};
+
+export type PublicEnrollmentLink = {
+  token: string;
+  course: PublicEnrollmentCourse;
 };

@@ -27,7 +27,7 @@ function hashToken(token: string) {
 }
 
 function cookieOptions() {
-  const secure = process.env.NODE_ENV === 'production';
+  const secure = false;
 
   return {
     httpOnly: true,

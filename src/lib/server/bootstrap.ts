@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 
 import { query } from './db';
-import { canonicalRoles } from './permissions';
+import { canonicalRoles, normalizeRole } from './permissions';
 
 let bootstrapped = false;
 let bootstrapPromise: Promise<void> | null = null;
@@ -51,6 +51,8 @@ async function createTables() {
     CREATE TABLE IF NOT EXISTS participants (
       id BIGSERIAL PRIMARY KEY,
       participant_code TEXT NOT NULL UNIQUE,
+      course_id BIGINT REFERENCES courses(id) ON DELETE SET NULL,
+      facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
       full_name TEXT NOT NULL,
       document_number TEXT NOT NULL UNIQUE,
       birth_date DATE NOT NULL,
@@ -98,6 +100,7 @@ async function createTables() {
       description TEXT NOT NULL,
       category TEXT NOT NULL,
       level TEXT NOT NULL,
+      facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
       instructor TEXT NOT NULL,
       instructor_bio TEXT,
       price NUMERIC(10,2) NOT NULL DEFAULT 0,
@@ -115,6 +118,7 @@ async function createTables() {
       inscritos INTEGER NOT NULL DEFAULT 0,
       estado TEXT NOT NULL DEFAULT 'draft',
       tags JSONB,
+      public_enrollment_token TEXT UNIQUE,
       created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
       updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -124,6 +128,7 @@ async function createTables() {
     CREATE TABLE IF NOT EXISTS enrollments (
       id BIGSERIAL PRIMARY KEY,
       course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
       participant_id BIGINT REFERENCES participants(id) ON DELETE SET NULL,
       enrolled_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
       full_name TEXT NOT NULL,
@@ -137,13 +142,63 @@ async function createTables() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS notifications (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+      audience_role TEXT,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      payload JSONB,
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS file_objects (
+      id BIGSERIAL PRIMARY KEY,
+      storage_key TEXT NOT NULL UNIQUE,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes BIGINT NOT NULL,
+      kind TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id BIGINT,
+      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS course_certificates (
+      id BIGSERIAL PRIMARY KEY,
+      course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      participant_id BIGINT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+      enrollment_id BIGINT REFERENCES enrollments(id) ON DELETE SET NULL,
+      certificate_number TEXT NOT NULL UNIQUE,
+      pdf_file_id BIGINT REFERENCES file_objects(id) ON DELETE SET NULL,
+      completed_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'facilitadora', 'participante'));
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'empleado', 'facilitador', 'participante'));
 
     ALTER TABLE participants DROP CONSTRAINT IF EXISTS participants_lifecycle_state_check;
     ALTER TABLE participants ADD CONSTRAINT participants_lifecycle_state_check CHECK (lifecycle_state IN ('active', 'inactive'));
 
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS district TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS course_id BIGINT REFERENCES courses(id) ON DELETE SET NULL;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS role_function TEXT NOT NULL DEFAULT 'Participante';
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS education_level TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS lifecycle_state TEXT NOT NULL DEFAULT 'active';
@@ -155,20 +210,30 @@ async function createTables() {
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS phone_number TEXT NOT NULL DEFAULT '';
 
     ALTER TABLE courses DROP CONSTRAINT IF EXISTS courses_estado_check;
-    ALTER TABLE courses ADD CONSTRAINT courses_estado_check CHECK (estado IN ('draft', 'published', 'enrolling', 'in_progress', 'completed', 'cancelled'));
+    ALTER TABLE courses ADD CONSTRAINT courses_estado_check CHECK (estado IN ('draft', 'published', 'enrolling', 'full', 'in_progress', 'completed', 'cancelled'));
+
+    ALTER TABLE courses ADD COLUMN IF NOT EXISTS facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE courses ADD COLUMN IF NOT EXISTS public_enrollment_token TEXT UNIQUE;
 
     ALTER TABLE courses ADD COLUMN IF NOT EXISTS departamento TEXT;
     ALTER TABLE courses ADD COLUMN IF NOT EXISTS municipio TEXT;
 
     ALTER TABLE enrollments DROP CONSTRAINT IF EXISTS enrollments_estado_check;
-    ALTER TABLE enrollments ADD CONSTRAINT enrollments_estado_check CHECK (estado IN ('confirmed', 'cancelled', 'withdrawn'));
+    ALTER TABLE enrollments ADD CONSTRAINT enrollments_estado_check CHECK (estado IN ('pending', 'confirmed', 'duplicate_review', 'cancelled', 'withdrawn'));
+
+    ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
 
     CREATE UNIQUE INDEX IF NOT EXISTS enrollments_active_course_participant_idx
       ON enrollments (course_id, participant_id)
       WHERE estado NOT IN ('cancelled', 'withdrawn') AND participant_id IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS notifications_user_read_idx ON notifications (user_id, read_at, created_at DESC);
+    CREATE INDEX IF NOT EXISTS notifications_role_read_idx ON notifications (audience_role, read_at, created_at DESC);
+    CREATE INDEX IF NOT EXISTS course_certificates_course_idx ON course_certificates (course_id, participant_id);
   `);
 
-  await query(`UPDATE users SET role = CASE role WHEN 'operator' THEN 'facilitadora' WHEN 'viewer' THEN 'participante' ELSE role END`);
+  await query(`UPDATE users SET role = CASE role WHEN 'operator' THEN 'empleado' WHEN 'facilitadora' THEN 'facilitador' WHEN 'viewer' THEN 'participante' ELSE role END`);
+  await query(`UPDATE users SET role = $1 WHERE role NOT IN ('admin', 'empleado', 'facilitador', 'participante')`, [normalizeRole('participante')]);
   await query(`UPDATE participants SET phone = COALESCE(phone, phone_dial_code || ' ' || phone_number) WHERE phone IS NULL OR phone = ''`);
 }
 

@@ -1,0 +1,14 @@
+FROM node:20-alpine
+WORKDIR /app
+
+ARG VITE_API_URL=http://localhost:4321
+ARG VITE_VAPID_PUBLIC_KEY=YOUR_VAPID_PUBLIC_KEY
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

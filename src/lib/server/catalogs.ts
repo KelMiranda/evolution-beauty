@@ -2,7 +2,7 @@ import { centralAmericaCountries, elSalvadorDepartments, municipalitiesByDepartm
 
 export const participantGenderOptions = ['Femenino', 'Masculino'] as const;
 
-export const participantRoleFunctionOptions = ['Empleado', 'Facilitadora', 'Participante', 'Otro'] as const;
+export const participantRoleFunctionOptions = ['Empleado', 'Facilitador', 'Participante', 'Otro'] as const;
 
 export const participantEducationLevelOptions = [
   'Sin escolaridad',
@@ -41,13 +41,24 @@ export const courseCategoryOptions = [
 
 export const courseLevelOptions = ['Básico', 'Intermedio', 'Avanzado'] as const;
 
-export const courseStateOptions = ['draft', 'published', 'enrolling', 'in_progress', 'completed', 'cancelled'] as const;
+export const courseStateOptions = ['draft', 'published', 'enrolling', 'full', 'in_progress', 'completed', 'cancelled'] as const;
 
 export type CourseCategory = (typeof courseCategoryOptions)[number];
 export type CourseLevel = (typeof courseLevelOptions)[number];
 export type CourseState = (typeof courseStateOptions)[number];
 
-export const enrollmentStateOptions = ['confirmed', 'cancelled', 'withdrawn'] as const;
+export const enrollmentStateOptions = ['pending', 'confirmed', 'duplicate_review', 'cancelled', 'withdrawn'] as const;
+
+export const roleCatalog = ['admin', 'empleado', 'facilitador', 'participante'] as const;
+export const functionCatalog = participantRoleFunctionOptions;
+export const genderCatalog = participantGenderOptions;
+export const educationCatalog = participantEducationLevelOptions;
+export const lifecycleCatalog = participantLifecycleOptions;
+export const geoCatalog = {
+  countries: participantCountryOptions,
+  departments: elSalvadorDepartments,
+  municipalitiesByDepartment,
+} as const;
 
 export type EnrollmentState = (typeof enrollmentStateOptions)[number];
 

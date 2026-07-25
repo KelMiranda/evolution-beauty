@@ -1,9 +1,13 @@
 import { query, withTransaction } from './db';
 import { recordAuditEvent } from './audit';
+import { createNotification, notificationKinds } from './notifications';
+import { getCourseById } from './courses';
 
 export type Participant = {
   id: number;
   participant_code: string;
+  course_id: number | null;
+  facilitator_id: number | null;
   full_name: string;
   document_number: string;
   birth_date: string;
@@ -33,7 +37,23 @@ export type Participant = {
   updated_at: string;
 };
 
+export type ParticipantHistoryEntry = {
+  id: number;
+  action: string;
+  actor_user_id: number | null;
+  before_data: Record<string, unknown> | null;
+  after_data: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type ParticipantDuplicateMatch = Pick<Participant, 'id' | 'participant_code' | 'full_name' | 'document_number' | 'email' | 'phone' | 'lifecycle_state' | 'deleted_at'> & {
+  match_reason: 'document_number' | 'email' | 'phone';
+};
+
 export type ParticipantInput = {
+  courseId?: number;
+  facilitatorId?: number | null;
   fullName: string;
   documentNumber: string;
   birthDate: string;
@@ -214,19 +234,27 @@ export async function getParticipantIndicators(dateFrom?: string, dateTo?: strin
 
 export async function createParticipant(input: ParticipantInput, createdBy: number | null) {
   return withTransaction(async (tx) => {
+    let facilitatorId = input.facilitatorId ?? null;
+    if (facilitatorId == null && input.courseId) {
+      const course = await getCourseById(input.courseId, { includeHidden: true });
+      facilitatorId = course?.facilitator_id ?? null;
+    }
+
     const id = await reserveParticipantId(tx);
     const participantCode = buildParticipantCode(id);
 
     const result = await tx.query<Participant>(
       `INSERT INTO participants (
-        id, participant_code, full_name, document_number, birth_date, gender, phone_country, phone_dial_code, phone_number, phone,
+        id, participant_code, course_id, facilitator_id, full_name, document_number, birth_date, gender, phone_country, phone_dial_code, phone_number, phone,
         email, address, municipality, department, district, organization, role_function, education_level, program, status,
         lifecycle_state, notes, consent, created_by, updated_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
       RETURNING *`,
       [
         id,
         participantCode,
+        input.courseId ?? null,
+        facilitatorId,
         input.fullName,
         input.documentNumber,
         input.birthDate,
@@ -263,6 +291,16 @@ export async function createParticipant(input: ParticipantInput, createdBy: numb
       afterData: participant,
       metadata: { participant_code: participant.participant_code },
     });
+
+    if (input.roleFunction === 'Facilitador' || input.status === 'Pendiente' || input.status === 'Revisar') {
+      await createNotification({
+        audienceRole: 'admin',
+        kind: notificationKinds.facilitatorPending,
+        title: 'Facilitador pendiente de validación',
+        body: `${participant.full_name} requiere validación interna.`,
+        payload: { participantId: participant.id, participantCode: participant.participant_code },
+      });
+    }
 
     return participant;
   });
@@ -460,6 +498,102 @@ export async function getParticipantAuditTrail(id: number) {
   );
 
   return result.rows;
+}
+
+export async function getParticipantHistory(id: number): Promise<ParticipantHistoryEntry[]> {
+  const result = await query<ParticipantHistoryEntry>(
+    `SELECT id, action, actor_user_id, before_data, after_data, metadata, created_at
+     FROM audit_events
+     WHERE entity_type = 'participant' AND entity_id = $1
+     ORDER BY created_at ASC, id ASC`,
+    [id],
+  );
+
+  return result.rows;
+}
+
+export async function findParticipantDuplicates(input: Pick<ParticipantInput, 'documentNumber' | 'email' | 'phone'> & { participantId?: number }) {
+  const matches: string[] = [];
+  const exclusions: string[] = [];
+  const values: unknown[] = [];
+
+  if (input.documentNumber.trim()) {
+    values.push(input.documentNumber.trim());
+    matches.push(`document_number = $${values.length}`);
+  }
+
+  if (input.email?.trim()) {
+    values.push(input.email.trim().toLowerCase());
+    matches.push(`LOWER(COALESCE(email, '')) = $${values.length}`);
+  }
+
+  if (input.phone.trim()) {
+    values.push(input.phone.trim());
+    matches.push(`phone = $${values.length}`);
+  }
+
+  if (matches.length === 0) {
+    return [];
+  }
+
+  if (input.participantId !== undefined) {
+    values.push(input.participantId);
+    exclusions.push(`id <> $${values.length}`);
+  }
+
+  const filters = [...exclusions, ...matches];
+
+  const result = await query<Participant>(
+    `SELECT * FROM participants
+     WHERE deleted_at IS NULL AND ${filters.map((filter) => `(${filter})`).join(' AND ')}
+     ORDER BY created_at DESC, id DESC`,
+    values,
+  );
+
+  return result.rows.map<ParticipantDuplicateMatch>((participant) => {
+    const matchReason = participant.document_number === input.documentNumber.trim()
+      ? 'document_number'
+      : participant.email && input.email?.trim() && participant.email.toLowerCase() === input.email.trim().toLowerCase()
+        ? 'email'
+        : 'phone';
+
+    return { ...participant, match_reason: matchReason };
+  });
+}
+
+export function mapParticipantExportRows(participants: Participant[]) {
+  const headers = [
+    'ID', 'Código', 'Nombre completo', 'Documento', 'Nacimiento', 'Género', 'País', 'Prefijo', 'Número', 'Teléfono completo', 'Correo',
+    'Dirección', 'Municipio', 'Departamento', 'Distrito', 'Entidad', 'Función', 'Nivel educativo', 'Programa', 'Estado', 'Vigencia', 'Consentimiento', 'Creado',
+  ];
+
+  const rows = participants.map((participant) => [
+    participant.id,
+    participant.participant_code,
+    participant.full_name,
+    participant.document_number,
+    participant.birth_date,
+    participant.gender,
+    participant.phone_country,
+    participant.phone_dial_code,
+    participant.phone_number,
+    `${participant.phone_dial_code} ${participant.phone_number}`,
+    participant.email ?? '',
+    participant.address ?? '',
+    participant.municipality ?? '',
+    participant.department ?? '',
+    participant.district ?? '',
+    participant.organization ?? '',
+    participant.role_function,
+    participant.education_level ?? '',
+    participant.program ?? '',
+    participant.status,
+    participant.lifecycle_state,
+    participant.consent ? 'Sí' : 'No',
+    participant.created_at,
+  ]);
+
+  return { headers, rows };
 }
 
 export function exportParticipantsCsv(participants: Participant[]) {

@@ -24,8 +24,10 @@ services:
     environment:
       DATABASE_URL: postgres://acoes:acoes@db:5432/acoes_local
       NODE_ENV: production
+      COOKIE_SECURE: 'false'
       PORT: 4321
       HOST: 0.0.0.0
+      REACT_APP_URL: http://localhost:3000
       INITIAL_ADMIN_EMAIL: admin@acoes.local
       INITIAL_ADMIN_PASSWORD: Admin1234!
     ports:
@@ -33,6 +35,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4321
+        VITE_VAPID_PUBLIC_KEY: YOUR_VAPID_PUBLIC_KEY
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    depends_on:
+      app:
+        condition: service_started
 
 volumes:
   acoes_pgdata:

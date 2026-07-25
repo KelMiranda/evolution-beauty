@@ -1,5 +1,7 @@
 export interface Registro {
   id: string
+  courseId?: string
+  facilitatorId?: string
   nombre: string
   dui: string
   fechaNacimiento: string
@@ -49,6 +51,7 @@ export interface Curso {
   lng?: number
   cupoMaximo: number
   inscritos: number
+  facilitadorId?: string
   instructor: string
   instructorBio: string
   estado: 'abierto' | 'lleno' | 'en_curso' | 'finalizado' | 'proximamente'

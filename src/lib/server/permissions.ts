@@ -1,4 +1,4 @@
-export const canonicalRoles = ['admin', 'facilitadora', 'participante'] as const;
+export const canonicalRoles = ['admin', 'empleado', 'facilitador', 'participante'] as const;
 
 export type CanonicalRole = (typeof canonicalRoles)[number];
 
@@ -10,28 +10,36 @@ export type PermissionKey =
   | 'participants:audit'
   | 'users:manage'
   | 'users:audit'
+  | 'facilitators:validate'
   | 'courses:view'
   | 'courses:manage'
   | 'enrollments:view'
   | 'enrollments:manage';
 
 const permissionMatrix: Record<CanonicalRole, PermissionKey[]> = {
-  admin: ['dashboard:view', 'participants:create', 'participants:manage', 'participants:export', 'participants:audit', 'users:manage', 'users:audit', 'courses:view', 'courses:manage', 'enrollments:view', 'enrollments:manage'],
-  facilitadora: ['participants:create', 'courses:view', 'enrollments:view'],
+  admin: ['dashboard:view', 'participants:create', 'participants:manage', 'participants:export', 'participants:audit', 'users:manage', 'users:audit', 'facilitators:validate', 'courses:view', 'courses:manage', 'enrollments:view', 'enrollments:manage'],
+  empleado: ['dashboard:view', 'participants:create', 'participants:manage', 'participants:export', 'participants:audit', 'facilitators:validate', 'courses:view', 'enrollments:view'],
+  facilitador: ['participants:create', 'courses:view', 'enrollments:view'],
   participante: ['courses:view'],
 };
 
 export function normalizeRole(role: string): CanonicalRole {
-  switch (role) {
+  const normalized = role.trim().toLowerCase();
+
+  switch (normalized) {
     case 'admin':
       return 'admin';
+    case 'empleado':
+    case 'employee':
     case 'operator':
-      return 'facilitadora';
-    case 'viewer':
-      return 'participante';
+      return 'empleado';
+    case 'facilitador':
     case 'facilitadora':
-      return 'facilitadora';
+    case 'instructor':
+      return 'facilitador';
     case 'participante':
+    case 'participant':
+    case 'viewer':
       return 'participante';
     default:
       return 'participante';
@@ -66,6 +74,10 @@ export function canExportParticipants(user: { role: CanonicalRole } | null) {
 
 export function canViewAuditTrail(user: { role: CanonicalRole } | null) {
   return hasPermission(user, 'users:audit');
+}
+
+export function canValidateFacilitators(user: { role: CanonicalRole } | null) {
+  return hasPermission(user, 'facilitators:validate');
 }
 
 export function canManageUsers(user: { role: CanonicalRole } | null) {

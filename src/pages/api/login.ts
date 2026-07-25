@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 
 import { createSession, loginUser } from '../../lib/server/auth';
+import { normalizeRole } from '../../lib/server/permissions';
 
 const schema = z.object({
   email: z.string().email(),
@@ -39,9 +40,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   await createSession(user.id, cookies);
 
   let redirectTo = '/dashboard';
-  if (user.role === 'participante') {
+  const role = normalizeRole(user.role);
+
+  if (role === 'participante') {
     redirectTo = '/registro';
-  } else if (user.role === 'facilitadora') {
+  } else if (role === 'facilitador') {
     redirectTo = '/dashboard/participantes/nuevo';
   }
 

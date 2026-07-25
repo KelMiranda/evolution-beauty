@@ -1,10 +1,12 @@
 import { query, withTransaction } from './db';
 import { recordAuditEvent } from './audit';
 import { isEnrollableCourseState } from './courses';
+import { createNotification, notificationKinds } from './notifications';
 
 export type Enrollment = {
   id: number;
   course_id: number;
+  facilitator_id: number | null;
   participant_id: number | null;
   enrolled_by: number | null;
   full_name: string;
@@ -20,6 +22,7 @@ export type Enrollment = {
 
 export type EnrollmentInput = {
   courseId: number;
+  publicToken?: string;
   participantId?: number;
   enrolledBy?: number;
   fullName: string;
@@ -77,12 +80,20 @@ export async function getEnrollmentById(id: number) {
 
 export async function createEnrollment(input: EnrollmentInput) {
   return withTransaction(async (tx) => {
-    const courseCheck = await tx.query<{ cupo_maximo: number; inscritos: number; estado: string }>(
-      `SELECT cupo_maximo, inscritos, estado FROM courses WHERE id = $1 LIMIT 1`,
-      [input.courseId],
+    const courseCheck = await tx.query<{ cupo_maximo: number; inscritos: number; estado: string; facilitator_id: number | null }>(
+      `SELECT cupo_maximo, inscritos, estado, facilitator_id
+       FROM courses
+       WHERE id = $1
+         AND ($2::text IS NULL OR public_enrollment_token = $2)
+       LIMIT 1`,
+      [input.courseId, input.publicToken ?? null],
     );
 
-    if (courseCheck.rows.length === 0 || !isEnrollableCourseState(courseCheck.rows[0].estado)) {
+    if (courseCheck.rows.length === 0) {
+      throw new Error(input.publicToken ? 'El enlace público no es válido' : 'El curso no está disponible para inscripción');
+    }
+
+    if (!isEnrollableCourseState(courseCheck.rows[0].estado)) {
       throw new Error('El curso no está disponible para inscripción');
     }
 
@@ -98,6 +109,7 @@ export async function createEnrollment(input: EnrollmentInput) {
     }
 
     const course = courseCheck.rows[0];
+    const facilitatorId = course.facilitator_id ?? null;
 
     if (course.inscritos >= course.cupo_maximo) {
       throw new Error('El curso ha alcanzado su cupo máximo');
@@ -105,11 +117,12 @@ export async function createEnrollment(input: EnrollmentInput) {
 
     const result = await tx.query<Enrollment>(
       `INSERT INTO enrollments (
-        course_id, participant_id, enrolled_by, full_name, email, phone, dui, estado, notas
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'confirmed',$8)
+        course_id, facilitator_id, participant_id, enrolled_by, full_name, email, phone, dui, estado, notas
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'confirmed',$9)
       RETURNING *`,
       [
         input.courseId,
+        facilitatorId,
         input.participantId ?? null,
         input.enrolledBy ?? null,
         input.fullName,
@@ -134,6 +147,14 @@ export async function createEnrollment(input: EnrollmentInput) {
       actorUserId: input.enrolledBy ?? null,
       afterData: enrollment,
       metadata: { courseId: input.courseId },
+    });
+
+    await createNotification({
+      audienceRole: 'admin',
+      kind: notificationKinds.participantEnrolled,
+      title: 'Participante inscrito',
+      body: `${input.fullName} fue inscrito en el curso ${input.courseId}.`,
+      payload: { courseId: input.courseId, enrollmentId: enrollment.id },
     });
 
     return enrollment;

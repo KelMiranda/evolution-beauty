@@ -75,6 +75,7 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
     if (parsed.data.description !== undefined) patch.description = parsed.data.description;
     if (parsed.data.category !== undefined) patch.category = parsed.data.category;
     if (parsed.data.level !== undefined) patch.level = parsed.data.level;
+    if (parsed.data.facilitatorId !== undefined) patch.facilitatorId = parsed.data.facilitatorId;
     if (parsed.data.instructor !== undefined) patch.instructor = parsed.data.instructor;
     if (parsed.data.instructorBio !== undefined) patch.instructorBio = parsed.data.instructorBio;
     if (parsed.data.price !== undefined) patch.price = parsed.data.price;

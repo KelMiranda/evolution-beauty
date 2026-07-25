@@ -16,7 +16,13 @@ const optionalText = z.union([z.string(), z.literal('')]).optional().transform((
   return normalized ? normalized : undefined;
 });
 
-const participantSubmissionShape = {
+const optionalUrl = z.union([z.string(), z.literal('')]).optional().transform((value) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+});
+
+const participantBaseShape = {
+  courseId: z.coerce.number().int().positive().optional(),
   fullName: z.string().trim().min(2, 'El nombre es obligatorio'),
   documentNumber: z.string().trim().min(3, 'El documento es obligatorio'),
   birthDate: z.string().trim().min(1, 'La fecha de nacimiento es obligatoria'),
@@ -42,9 +48,15 @@ const participantSubmissionShape = {
   status: z.enum(participantStatusOptions, { errorMap: () => ({ message: 'Selecciona un estado válido' }) }),
   notes: optionalText,
   consent: z.boolean(),
-} as const;
+};
 
-export const participantSubmissionSchema = z.object(participantSubmissionShape).superRefine((data, ctx) => {
+const participantExtendedShape = {
+  cardNumber: optionalText,
+  photoUrl: optionalUrl,
+  coursesCount: z.coerce.number().int().min(0).default(0),
+};
+
+const participantPublicObjectSchema = z.object(participantBaseShape).superRefine((data, ctx) => {
   if (!participantCountryOptions.some((country) => country.name === data.phoneCountry)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phoneCountry'], message: 'Selecciona un país válido' });
   }
@@ -62,10 +74,17 @@ export const participantSubmissionSchema = z.object(participantSubmissionShape).
   }
 });
 
+export const participantPublicSchema = participantPublicObjectSchema;
+
+export const participantExtendedSchema = participantPublicObjectSchema.and(z.object(participantExtendedShape));
+
+export const participantSubmissionSchema = participantExtendedSchema;
+
 export type ParticipantSubmission = z.infer<typeof participantSubmissionSchema>;
 
 export function extractParticipantSubmission(formData: FormData, defaultStatus: ParticipantSubmission['status']) {
   return {
+    courseId: formData.get('courseId') ? Number(formData.get('courseId')) : undefined,
     fullName: String(formData.get('fullName') ?? ''),
     documentNumber: String(formData.get('documentNumber') ?? ''),
     birthDate: String(formData.get('birthDate') ?? ''),
@@ -86,6 +105,9 @@ export function extractParticipantSubmission(formData: FormData, defaultStatus: 
     status: String(formData.get('status') ?? defaultStatus),
     notes: String(formData.get('notes') ?? ''),
     consent: formData.get('consent') ? true : false,
+    cardNumber: String(formData.get('cardNumber') ?? ''),
+    photoUrl: String(formData.get('photoUrl') ?? ''),
+    coursesCount: String(formData.get('coursesCount') ?? 0),
   };
 }
 

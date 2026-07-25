@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import { getCurso, inscribir } from '@/services/api'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
+import { getCurso, inscribir, resolvePublicEnrollmentLink } from '@/services/api'
 import { AnimatedSection } from '@/components/AnimatedSection'
+import { FALLBACK_COURSE_IMAGE } from '@/lib/images'
 import {
   MapPin, Calendar, Clock, Users, ChevronLeft, CheckCircle2,
   User, AlertCircle, Tag
@@ -10,27 +11,46 @@ import type { Curso } from '@/types'
 
 export function CursoDetallePage() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [curso, setCurso] = useState<Curso | null>(null)
+  const [facilitadorNombre, setFacilitadorNombre] = useState('')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [formData, setFormData] = useState({ nombre: '', correo: '', telefono: '', dui: '', notas: '' })
   const [formError, setFormError] = useState('')
+  const [publicToken, setPublicToken] = useState('')
+  const [tokenError, setTokenError] = useState('')
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     window.scrollTo(0, 0)
     if (id) loadCurso()
   }, [id])
 
+  useEffect(() => {
+    const token = searchParams.get('token')?.trim() ?? ''
+    if (!token) return
+    setPublicToken(token)
+    resolvePublicEnrollmentLink(token)
+      .then(link => {
+        if (String(link.course.id) !== id) {
+          setTokenError('El enlace no corresponde a este curso')
+        }
+      })
+      .catch(err => setTokenError(err instanceof Error ? err.message : 'Token inválido'))
+  }, [id, searchParams])
+
   const loadCurso = async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const c = await getCurso(id!)
       setCurso(c)
+      setFacilitadorNombre(c.instructor)
     } catch {
-      navigate('/cursos')
+      setLoadError('No se pudo cargar el curso')
     } finally {
       setLoading(false)
     }
@@ -52,7 +72,7 @@ export function CursoDetallePage() {
         telefono: formData.telefono,
         dui: formData.dui,
         notas: formData.notas,
-      })
+      }, publicToken || undefined)
       setSuccess(true)
       if (curso) {
         setCurso({ ...curso, inscritos: curso.inscritos + 1 })
@@ -72,6 +92,20 @@ export function CursoDetallePage() {
     )
   }
 
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-charcoal flex items-center justify-center px-6">
+        <div className="max-w-md text-center space-y-4">
+          <h1 className="font-display text-3xl text-ivory">{loadError}</h1>
+          <p className="text-warm-gray">Revisá la conexión con la API o volvé al catálogo.</p>
+          <Link to="/cursos" className="inline-flex items-center gap-2 px-5 py-3 bg-gold text-charcoal rounded-xl font-semibold">
+            Volver a cursos
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   if (!curso) return null
 
   const cuposRestantes = curso.cupoMaximo - curso.inscritos
@@ -81,7 +115,12 @@ export function CursoDetallePage() {
     <div className="min-h-screen bg-charcoal">
       {/* Back + Hero Image */}
       <div className="relative h-[40vh] md:h-[50vh] overflow-hidden">
-        <img src={curso.imagen} alt={curso.nombre} className="w-full h-full object-cover" />
+        <img
+          src={curso.imagen || FALLBACK_COURSE_IMAGE}
+          alt={curso.nombre}
+          className="w-full h-full object-cover"
+          onError={(e) => { e.currentTarget.src = FALLBACK_COURSE_IMAGE }}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/50 to-transparent" />
         <div className="absolute top-6 left-6 z-10">
           <Link to="/cursos" className="flex items-center gap-2 text-ivory/70 hover:text-gold text-sm transition-colors">
@@ -110,19 +149,30 @@ export function CursoDetallePage() {
             <AnimatedSection>
               <h2 className="font-display text-2xl text-ivory mb-4">Sobre el curso</h2>
               <p className="text-warm-gray leading-relaxed">{curso.descripcion}</p>
+                {publicToken && (
+                  <div className="mt-4 rounded-xl border border-gold/20 bg-gold/5 p-4 text-sm text-ivory/80">
+                    <p className="font-medium text-gold">Inscripción pública activa</p>
+                    <p className="mt-1">{curso.nombre}</p>
+                    <p>{curso.instructor}</p>
+                    {tokenError && <p className="mt-2 text-error">{tokenError}</p>}
+                  </div>
+                )}
             </AnimatedSection>
 
             <AnimatedSection>
               <h2 className="font-display text-2xl text-ivory mb-4">Instructor</h2>
-              <div className="flex items-start gap-4 bg-charcoal-light rounded-xl p-5 border border-warm-tan/10">
-                <div className="w-14 h-14 rounded-full bg-gold/10 flex items-center justify-center flex-shrink-0">
-                  <User className="w-6 h-6 text-gold" />
+                <div className="flex items-start gap-4 bg-charcoal-light rounded-xl p-5 border border-warm-tan/10">
+                  <div className="w-14 h-14 rounded-full bg-gold/10 flex items-center justify-center flex-shrink-0">
+                    <User className="w-6 h-6 text-gold" />
+                  </div>
+                  <div>
+                    <p className="text-ivory font-medium">{curso.instructor}</p>
+                    {facilitadorNombre && (
+                      <p className="text-warm-gray text-sm mt-1">Facilitador: {facilitadorNombre}</p>
+                    )}
+                    <p className="text-warm-gray text-sm mt-1 leading-relaxed">{curso.instructorBio}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-ivory font-medium">{curso.instructor}</p>
-                  <p className="text-warm-gray text-sm mt-1 leading-relaxed">{curso.instructorBio}</p>
-                </div>
-              </div>
             </AnimatedSection>
 
             {/* Tags */}
@@ -216,13 +266,18 @@ export function CursoDetallePage() {
                   </div>
 
                   {/* CTA */}
-                  {puedeInscribirse && !success && (
+                  {puedeInscribirse && !success && !tokenError && (
                     <button
                       onClick={() => setShowForm(true)}
                       className="w-full py-3.5 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-all"
                     >
                       Inscribirme ahora
                     </button>
+                  )}
+                  {tokenError && (
+                    <div className="w-full py-3.5 bg-error/10 text-error text-sm font-medium rounded-xl text-center border border-error/20">
+                      {tokenError}
+                    </div>
                   )}
 
                   {curso.estado === 'lleno' && (

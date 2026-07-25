@@ -4,7 +4,7 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 import type { Registro, User, Curso, InscripcionCurso, DashboardStats, LoginCredentials } from '@/types'
 
 // Import our backend types for mapping
-import type { AuthUser, Participant, Course } from './api.backend.types'
+import type { AuthUser, BackendUser, Participant, Course, ParticipantHistoryEntry, CoursePublicLink, PublicEnrollmentLink } from './api.backend.types'
 
 function getErrorMessage(response: Response): string {
   try {
@@ -109,6 +109,13 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 }
 
+export async function getFacilitators(): Promise<Array<{ id: string; name: string }>> {
+  const response = await api.get<{ data: BackendUser[] }>('/api/users');
+  return response.data
+    .filter(user => user.role === 'facilitador' && user.active)
+    .map(user => ({ id: String(user.id), name: user.full_name }));
+}
+
 export function logout(): void {
   // Call our backend logout endpoint
   api.post('/api/logout').catch(console.error);
@@ -120,6 +127,8 @@ export function logout(): void {
 function mapParticipantToRegistro(p: Participant): Registro {
   return {
     id: String(p.id),
+    courseId: p.course_id ? String(p.course_id) : undefined,
+    facilitatorId: p.facilitator_id ? String(p.facilitator_id) : undefined,
     nombre: p.full_name,
     dui: p.document_number || '',
     fechaNacimiento: p.birth_date || '',
@@ -171,6 +180,35 @@ export async function getRegistros(params?: {
   };
 }
 
+export async function getParticipantHistory(id: string): Promise<{ participant: Participant; history: ParticipantHistoryEntry[] }> {
+  return api.get(`/api/participants/${id}/history`)
+}
+
+export async function getParticipantDuplicates(id: string): Promise<{ participant: Participant; duplicates: Participant[] }> {
+  return api.get(`/api/participants/${id}/duplicates`)
+}
+
+export async function downloadParticipantsXlsx(params?: { search?: string; departamento?: string; estado?: string; page?: number; limit?: number }): Promise<void> {
+  const backendParams: Record<string, string> = { format: 'xlsx' }
+  if (params?.search) backendParams.q = params.search
+  if (params?.departamento) backendParams.department = params.departamento
+  if (params?.estado) backendParams.status = params.estado
+  if (params?.page) backendParams.page = String(params.page)
+  if (params?.limit) backendParams.limit = String(params.limit)
+
+  const query = new URLSearchParams(backendParams).toString()
+  const response = await fetch(`${BASE_URL}/api/participants${query ? `?${query}` : ''}`, { credentials: 'include' })
+  if (!response.ok) throw new Error(await response.text())
+
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ACOES_Registros_${new Date().toISOString().split('T')[0]}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export async function getRegistro(id: string): Promise<Registro> {
   const response = await api.get<{ data: Participant }>(`/api/participants/${id}`);
   return mapParticipantToRegistro(response.data);
@@ -179,6 +217,7 @@ export async function getRegistro(id: string): Promise<Registro> {
 export async function createRegistro(data: Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado'>): Promise<Registro> {
   // Map Registro to our backend Participant format
   const backendData = {
+    courseId: data.courseId ? Number(data.courseId) : undefined,
     full_name: data.nombre,
     document_number: data.dui,
     birth_date: data.fechaNacimiento,
@@ -199,7 +238,7 @@ export async function createRegistro(data: Omit<Registro, 'id' | 'codigo' | 'fec
     notes: data.observaciones,
   };
 
-  const response = await api.post<{ data: Participant }>('/api/participants', backendData);
+  const response = await api.post<{ data: Participant }>('/api/public/participants', backendData);
   return mapParticipantToRegistro(response.data);
 }
 
@@ -230,12 +269,23 @@ function mapCourseToCurso(c: Course): Curso {
     lng: c.lng ?? undefined,
     cupoMaximo: c.cupo_maximo,
     inscritos: c.inscritos,
+    facilitadorId: c.facilitator_id ? String(c.facilitator_id) : undefined,
     instructor: c.instructor,
     instructorBio: c.instructor_bio || '',
     estado: mapEstado(c.estado),
     tags: c.tags || [],
     fechaRegistro: c.created_at.split('T')[0],
   };
+}
+
+export async function createCoursePublicLink(id: string): Promise<CoursePublicLink> {
+  const response = await api.post<{ data: CoursePublicLink }>(`/api/courses/${id}/public-link`);
+  return response.data;
+}
+
+export async function resolvePublicEnrollmentLink(token: string): Promise<PublicEnrollmentLink> {
+  const response = await api.get<{ data: PublicEnrollmentLink }>(`/api/public/courses/enrollment?token=${encodeURIComponent(token)}`);
+  return response.data;
 }
 
 function mapEstado(estado: string): Curso['estado'] {
@@ -308,16 +358,27 @@ export async function reverseGeocode(lat: number, lng: number): Promise<{ depart
   }
 }
 
-export async function getCursos(params?: { categoria?: string; nivel?: string; estado?: string; search?: string }): Promise<Curso[]> {
+export async function getCursos(params?: { categoria?: string; nivel?: string; estado?: string; search?: string; includeHidden?: boolean }): Promise<Curso[]> {
   const searchParams = new URLSearchParams();
   if (params?.categoria) searchParams.set('category', params.categoria);
   if (params?.nivel) searchParams.set('nivel', params.nivel);
   if (params?.estado) searchParams.set('estado', params.estado);
   if (params?.search) searchParams.set('search', params.search);
+  if (params?.includeHidden) searchParams.set('includeHidden', 'true');
   
   const query = searchParams.toString();
   const response = await api.get<{ data: Course[] }>(`/api/courses${query ? `?${query}` : ''}`);
   return response.data.map(mapCourseToCurso);
+}
+
+export async function getCourseRecords(params?: { search?: string; estado?: string; includeHidden?: boolean }): Promise<Course[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.search) searchParams.set('search', params.search);
+  if (params?.estado) searchParams.set('estado', params.estado);
+  if (params?.includeHidden) searchParams.set('includeHidden', 'true');
+  const query = searchParams.toString();
+  const response = await api.get<{ data: Course[] }>(`/api/courses${query ? `?${query}` : ''}`);
+  return response.data;
 }
 
 export async function getCurso(id: string): Promise<Curso> {
@@ -343,6 +404,7 @@ export async function createCurso(data: Omit<Curso, 'id' | 'inscritos' | 'fechaR
     lat: data.lat,
     lng: data.lng,
     cupo_maximo: data.cupoMaximo,
+    facilitator_id: data.facilitadorId ? Number(data.facilitadorId) : null,
     instructor: data.instructor,
     instructor_bio: data.instructorBio,
     tags: data.tags,
@@ -371,6 +433,7 @@ export async function updateCurso(id: string, data: Partial<Curso>): Promise<Cur
   if (data.lat !== undefined) backendData.lat = data.lat;
   if (data.lng !== undefined) backendData.lng = data.lng;
   if (data.cupoMaximo) backendData.cupo_maximo = data.cupoMaximo;
+  if (data.facilitadorId !== undefined) backendData.facilitator_id = data.facilitadorId ? Number(data.facilitadorId) : null;
   if (data.instructor) backendData.instructor = data.instructor;
   if (data.instructorBio !== undefined) backendData.instructor_bio = data.instructorBio;
   if (data.tags) backendData.tags = data.tags;
@@ -403,9 +466,10 @@ export async function getInscripciones(cursoId: string): Promise<InscripcionCurs
   }));
 }
 
-export async function inscribir(data: Omit<InscripcionCurso, 'id' | 'fechaInscripcion' | 'estado'>): Promise<InscripcionCurso> {
-  const response = await api.post<{ data: unknown }>('/api/enrollments', {
-    courseId: parseInt(data.cursoId),
+export async function inscribir(data: Omit<InscripcionCurso, 'id' | 'fechaInscripcion' | 'estado'>, token?: string): Promise<InscripcionCurso> {
+  const path = token ? '/api/public/enrollments' : '/api/enrollments';
+  const response = await api.post<{ data: unknown }>(path, {
+    ...(token ? { token } : { courseId: parseInt(data.cursoId) }),
     fullName: data.nombre,
     email: data.correo,
     phone: data.telefono,

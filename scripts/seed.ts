@@ -34,6 +34,26 @@ async function seed() {
     }
     console.log('✅ Admin user ensured\n');
 
+    const facilitatorEmail = 'facilitadora@acoes.local';
+    const facilitatorPassword = 'Facilitadora123!';
+    const facilitatorHash = await bcrypt.hash(facilitatorPassword, 10);
+
+    await client.query(
+      `INSERT INTO users (email, password_hash, full_name, role, active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+       ON CONFLICT (email) DO UPDATE SET
+         full_name = EXCLUDED.full_name,
+         role = EXCLUDED.role,
+         active = EXCLUDED.active,
+         updated_at = NOW()`,
+      [facilitatorEmail, facilitatorHash, 'María López', 'facilitador', true]
+    );
+
+    const facilitatorResult = await client.query<{ id: number }>('SELECT id FROM users WHERE email = $1 LIMIT 1', [facilitatorEmail]);
+    const facilitatorId = facilitatorResult.rows[0]?.id;
+    if (!facilitatorId) throw new Error('Facilitator seed failed');
+    console.log('✅ Facilitator user ensured\n');
+
     // Seed courses
     const courses = [
       {
@@ -160,19 +180,21 @@ async function seed() {
 
     let inserted = 0;
     for (const course of courses) {
+      const facilitatorCourseId = course.name === 'Colorimetría Profesional' ? facilitatorId : null;
       await client.query(
         `INSERT INTO courses (
-          name, description, category, level, instructor, instructor_bio,
+          name, description, category, level, facilitator_id, instructor, instructor_bio,
           price, price_original, image, fecha_inicio, fecha_fin, horario,
           ubicacion, lat, lng, cupo_maximo, inscritos, estado, tags,
           created_at, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),NOW())
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW(),NOW())
         ON CONFLICT DO NOTHING`,
         [
           course.name,
           course.description,
           course.category,
           course.level,
+          facilitatorCourseId,
           course.instructor,
           course.instructorBio,
           course.price,
@@ -196,6 +218,7 @@ async function seed() {
 
     console.log(`\n🎉 Seed complete! ${inserted} courses added.`);
     console.log(`\n📧 Admin: ${adminEmail} / ${adminPassword}`);
+    console.log(`📧 Facilitator: ${facilitatorEmail} / ${facilitatorPassword}`);
   } finally {
     client.release();
     await pool.end();

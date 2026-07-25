@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getCursos } from '@/services/api'
+import { getFacilitatorsCached, resolveFacilitatorName } from '@/lib/facilitators'
 import { AnimatedText, FadeIn, PageTransition } from '@/components/animations'
 import { Search, MapPin, Users, Calendar, ChevronRight, Clock } from 'lucide-react'
 import type { Curso } from '@/types'
+import { FALLBACK_COURSE_IMAGE } from '@/lib/images'
 
 const categorias = ['Todos', 'Colorimetría', 'Corte', 'Manicure', 'Maquillaje', 'Tratamientos', 'Barbería']
 const niveles = ['Todos', 'Básico', 'Intermedio', 'Avanzado']
@@ -14,8 +16,10 @@ export function CatalogoCursosPage() {
   const [search, setSearch] = useState('')
   const [categoria, setCategoria] = useState('Todos')
   const [nivel, setNivel] = useState('Todos')
+  const [facilitators, setFacilitators] = useState<Array<{ id: string; name: string }>>([])
 
   useEffect(() => { window.scrollTo(0, 0); loadCursos() }, [categoria, nivel])
+  useEffect(() => { getFacilitatorsCached().then(setFacilitators).catch(() => setFacilitators([])) }, [])
 
   const loadCursos = async () => {
     setLoading(true)
@@ -42,7 +46,7 @@ export function CatalogoCursosPage() {
             <FadeIn>
               <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-gold/70">Cursos ACOES</span>
             </FadeIn>
-            <AnimatedText className="mt-5 font-display text-5xl md:text-6xl text-ivory leading-[0.95]" type="words" stagger={0.06}>
+            <AnimatedText className="mt-5 font-display text-5xl md:text-6xl text-ivory leading-[0.95]" tag="h1" type="words" stagger={0.06}>
               Formación de excelencia
             </AnimatedText>
             <FadeIn delay={0.3}>
@@ -109,7 +113,7 @@ export function CatalogoCursosPage() {
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {cursos.map((curso, i) => (
                   <FadeIn key={curso.id} delay={i * 0.1} direction="up" distance={40}>
-                    <CursoCard curso={curso} />
+                    <CursoCard curso={curso} facilitators={facilitators} />
                   </FadeIn>
                 ))}
               </div>
@@ -121,7 +125,8 @@ export function CatalogoCursosPage() {
   )
 }
 
-function CursoCard({ curso }: { curso: Curso }) {
+function CursoCard({ curso, facilitators }: { curso: Curso; facilitators: Array<{ id: string; name: string }> }) {
+  const facilitadorNombre = resolveFacilitatorName(curso.facilitadorId, facilitators)
   const cuposRestantes = curso.cupoMaximo - curso.inscritos
   const porcentaje = (curso.inscritos / curso.cupoMaximo) * 100
 
@@ -129,7 +134,12 @@ function CursoCard({ curso }: { curso: Curso }) {
     <Link to={`/cursos/${curso.id}`}
       className="group block bg-charcoal-light rounded-2xl overflow-hidden border border-warm-tan/[0.08] hover:border-gold/25 transition-all duration-500 hover:-translate-y-2 hover:shadow-glow">
       <div className="relative h-48 overflow-hidden">
-        <img src={curso.imagen} alt={curso.nombre} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+        <img
+          src={curso.imagen || FALLBACK_COURSE_IMAGE}
+          alt={curso.nombre}
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          onError={(e) => { e.currentTarget.src = FALLBACK_COURSE_IMAGE }}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-charcoal-light via-charcoal/30 to-transparent" />
         <div className="absolute top-3 left-3 flex gap-2">
           <span className="px-2.5 py-1 bg-charcoal/80 backdrop-blur-md text-ivory text-[10px] font-mono tracking-wider uppercase rounded-md border border-warm-tan/15">{curso.categoria}</span>
@@ -157,6 +167,9 @@ function CursoCard({ curso }: { curso: Curso }) {
           ) : <span className="text-lg font-display text-success flex-shrink-0">Gratis</span>}
         </div>
         <p className="mt-2 text-sm text-warm-gray line-clamp-2 leading-relaxed">{curso.descripcion}</p>
+        {facilitadorNombre && (
+          <p className="mt-2 text-[11px] text-gold/80">Facilitador: {facilitadorNombre}</p>
+        )}
         <div className="mt-4 flex flex-wrap gap-3 text-[11px] text-warm-gray/70">
           <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(curso.fechaInicio).toLocaleDateString('es-SV', { month: 'short', day: 'numeric' })}</span>
           <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{curso.horario}</span>

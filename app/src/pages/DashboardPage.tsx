@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useRegistros } from '@/hooks/useRegistros'
+import { createCoursePublicLink, downloadParticipantsXlsx, getCourseRecords } from '@/services/api'
 import { FadeIn, CountUp } from '@/components/animations'
 import {
   Users, GraduationCap, TrendingUp, BookOpen,
   Search, Download, ChevronLeft, ChevronRight,
-  Filter, Eye, MapPin, Phone
+  Filter, Eye, MapPin, Phone, Link as LinkIcon, Copy, RefreshCw, BadgeCheck
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -16,6 +17,10 @@ const COLORS = ['#C9A84C', '#8B7355', '#6B5A44', '#A08B6D']
 
 export function DashboardPage() {
   const { stats } = useDashboard()
+  const [courses, setCourses] = useState<Awaited<ReturnType<typeof getCourseRecords>>>([])
+  const [links, setLinks] = useState<Record<string, { token: string; publicUrl: string }>>({})
+  const [linkLoadingId, setLinkLoadingId] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ departamento: '', funcion: '', estado: '' })
   const [page, setPage] = useState(1)
@@ -34,15 +39,30 @@ export function DashboardPage() {
   const totalPages = Math.max(1, Math.ceil(total / 10))
   const selectedData = registros.find(r => r.id === selectedRegistro)
 
+  useEffect(() => {
+    getCourseRecords({ includeHidden: true }).then(setCourses).catch(() => setCourses([]))
+  }, [])
+
   const handleExport = () => {
-    const data = registros.map(r => ({ Codigo: r.codigo, Nombre: r.nombre, DUI: r.dui, Celular: r.celular, Correo: r.correo, Departamento: r.departamento, Funcion: r.funcion, Fecha: r.fechaRegistro, Estado: r.estado }))
-    const csv = [Object.keys(data[0]).join(','), ...data.map(row => Object.values(row).join(','))].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `ACOES_Registros_${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
+    downloadParticipantsXlsx({ search: search || undefined, departamento: filters.departamento || undefined, estado: filters.estado || undefined, page, limit: 10 })
+  }
+
+  const ensureLink = async (courseId: string) => {
+    setLinkLoadingId(courseId)
+    try {
+      const link = await createCoursePublicLink(courseId)
+      setLinks(prev => ({ ...prev, [courseId]: link }))
+      return link
+    } finally {
+      setLinkLoadingId(null)
+    }
+  }
+
+  const handleCopyLink = async (courseId: string) => {
+    const link = links[courseId] ?? await ensureLink(courseId)
+    await navigator.clipboard.writeText(link.publicUrl)
+    setCopiedId(courseId)
+    window.setTimeout(() => setCopiedId(current => current === courseId ? null : current), 1800)
   }
 
   return (
@@ -68,6 +88,83 @@ export function DashboardPage() {
           </FadeIn>
         ))}
       </div>
+
+      {/* Course links panel */}
+      <FadeIn delay={0.08}>
+        <div className="bg-charcoal-light rounded-xl border border-warm-tan/[0.08] overflow-hidden">
+          <div className="p-4 lg:p-5 border-b border-warm-tan/[0.08] flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-display text-lg text-ivory">Enlaces públicos de cursos</h3>
+              <p className="text-[11px] text-warm-gray/50 mt-1">Cursos activos, facilitador asignado, cupo y link de inscripción.</p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-gold/15 bg-gold/5 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-gold">
+              <BadgeCheck className="w-3.5 h-3.5" />
+              Admin / permiso
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px]">
+              <thead>
+                <tr className="border-b border-warm-tan/[0.08]">
+                  <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">Curso</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">Facilitador</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">Estado</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">Cupos</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">Token / link</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {courses.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-10 text-center text-warm-gray/40">No hay cursos publicados para gestión de enlaces</td></tr>
+                ) : courses.map(course => {
+                  const courseId = String(course.id)
+                  const link = links[courseId]
+                  const statusClass = course.estado === 'full' ? 'bg-error/10 text-error' : course.estado === 'completed' ? 'bg-warm-tan/10 text-warm-gray' : course.estado === 'in_progress' ? 'bg-gold/10 text-gold' : course.estado === 'enrolling' ? 'bg-success/10 text-success' : 'bg-ivory/10 text-ivory'
+
+                  return (
+                    <tr key={courseId} className="border-b border-warm-tan/[0.03] hover:bg-charcoal/30 transition-colors">
+                      <td className="px-4 py-3.5">
+                        <p className="text-sm text-ivory font-medium">{course.name}</p>
+                        <p className="text-[11px] text-warm-gray/50">{course.category}</p>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-ivory/80">{course.instructor}</td>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${statusClass}`}>{course.estado}</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-ivory/80">
+                        {course.inscritos}/{course.cupo_maximo}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 text-[11px] text-warm-gray/60">
+                            <LinkIcon className="w-3.5 h-3.5 text-gold" />
+                            <span className="font-mono">{link?.token ?? course.id}</span>
+                          </div>
+                          <p className="text-[10px] text-warm-gray/40 truncate max-w-[340px]">{link?.publicUrl ?? 'Genera el link para copiarlo'}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => ensureLink(courseId)} disabled={linkLoadingId === courseId} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-warm-tan/15 text-xs text-ivory hover:border-gold/25 hover:text-gold transition-colors disabled:opacity-50">
+                            <RefreshCw className={`w-3.5 h-3.5 ${linkLoadingId === courseId ? 'animate-spin' : ''}`} />
+                            Token
+                          </button>
+                          <button onClick={() => handleCopyLink(courseId)} disabled={linkLoadingId === courseId} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gold/10 border border-gold/20 text-xs text-gold hover:bg-gold/20 transition-colors disabled:opacity-50">
+                            <Copy className="w-3.5 h-3.5" />
+                            {copiedId === courseId ? 'Copiado' : 'Copiar'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </FadeIn>
 
       {/* Charts */}
       <div className="grid lg:grid-cols-3 gap-4">
@@ -117,7 +214,7 @@ export function DashboardPage() {
               <button onClick={() => setShowFilters(!showFilters)} className={`p-2 rounded-lg border transition-colors ${showFilters ? 'bg-gold/10 text-gold border-gold/20' : 'border-warm-tan/15 text-warm-gray hover:text-ivory'}`}>
                 <Filter className="w-4 h-4" />
               </button>
-              <button onClick={handleExport} className="p-2 rounded-lg bg-gold/10 text-gold border border-gold/20 hover:bg-gold/20 transition-colors">
+              <button onClick={handleExport} className="p-2 rounded-lg bg-gold/10 text-gold border border-gold/20 hover:bg-gold/20 transition-colors" title="Exportar a Excel">
                 <Download className="w-4 h-4" />
               </button>
             </div>

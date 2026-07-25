@@ -11,6 +11,7 @@ import { ConfigPage } from '@/pages/ConfigPage'
 import { CatalogoCursosPage } from '@/pages/CatalogoCursosPage'
 import { CursoDetallePage } from '@/pages/CursoDetallePage'
 import { AdminCursosPage } from '@/pages/AdminCursosPage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 import { useAuth } from '@/hooks/useAuth'
 
 function ProtectedRoute() {
@@ -48,7 +49,7 @@ export default function App() {
           </Route>
         </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </SmoothScroll>
   )

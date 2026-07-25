@@ -1,4 +1,5 @@
 import { AnimatedSection } from '@/components/AnimatedSection'
+import { NotificationSubscriptionCard } from '@/components/NotificationSubscriptionCard'
 import { useAuth } from '@/hooks/useAuth'
 import { UserCircle, Bell, Shield, Palette } from 'lucide-react'
 
@@ -13,6 +14,8 @@ export function ConfigPage() {
       </AnimatedSection>
 
       <div className="grid gap-6 max-w-2xl">
+        <NotificationSubscriptionCard />
+
         <AnimatedSection className="bg-charcoal-light rounded-xl p-6 border border-warm-tan/10">
           <div className="flex items-center gap-3 mb-6">
             <UserCircle className="w-5 h-5 text-gold" />

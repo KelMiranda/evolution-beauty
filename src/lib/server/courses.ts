@@ -1,5 +1,6 @@
 import { query, withTransaction } from './db';
 import { recordAuditEvent } from './audit';
+import { createNotification, notificationKinds } from './notifications';
 
 const readableCourseStates = ['published', 'enrolling', 'in_progress'] as const;
 const enrollableCourseStates = ['enrolling'] as const;
@@ -10,6 +11,7 @@ export type Course = {
   description: string;
   category: string;
   level: string;
+  facilitator_id: number | null;
   instructor: string;
   instructor_bio: string | null;
   price: number;
@@ -27,15 +29,23 @@ export type Course = {
   inscritos: number;
   estado: string;
   tags: string[] | null;
+  public_enrollment_token: string | null;
   created_at: string;
   updated_at: string;
 };
+
+export function generateCourseEnrollmentToken(courseId: number, facilitator: string) {
+  const normalizedFacilitator = facilitator.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const tokenBase = `${courseId}-${normalizedFacilitator || 'facilitator'}`;
+  return `${tokenBase}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export type CourseInput = {
   name: string;
   description: string;
   category: string;
   level: string;
+  facilitatorId?: number | null;
   instructor: string;
   instructorBio?: string;
   price: number;
@@ -139,20 +149,35 @@ export async function getCourseById(id: number, options: CourseLookupOptions = {
   return result.rows[0] ?? null;
 }
 
+export async function getCourseByPublicEnrollmentToken(token: string) {
+  const normalizedToken = token.trim();
+  if (!normalizedToken) return null;
+
+  const result = await query<Course>(
+    `SELECT * FROM courses
+     WHERE public_enrollment_token = $1
+     LIMIT 1`,
+    [normalizedToken],
+  );
+
+  return result.rows[0] ?? null;
+}
+
 export async function createCourse(input: CourseInput, createdBy: number | null) {
   return withTransaction(async (tx) => {
     const result = await tx.query<Course>(
       `INSERT INTO courses (
-        name, description, category, level, instructor, instructor_bio, price, price_original,
+        name, description, category, level, facilitator_id, instructor, instructor_bio, price, price_original,
         image, fecha_inicio, fecha_fin, horario, ubicacion, departamento, municipio, lat, lng, cupo_maximo, inscritos,
-        estado, tags, created_by, updated_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        estado, tags, public_enrollment_token, created_by, updated_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
       RETURNING *`,
       [
         input.name,
         input.description,
         input.category,
         input.level,
+        input.facilitatorId ?? null,
         input.instructor,
         input.instructorBio ?? null,
         input.price,
@@ -170,6 +195,7 @@ export async function createCourse(input: CourseInput, createdBy: number | null)
         0,
         input.estado,
         input.tags ? JSON.stringify(input.tags) : null,
+        null,
         createdBy,
         createdBy,
       ],
@@ -184,6 +210,16 @@ export async function createCourse(input: CourseInput, createdBy: number | null)
       actorUserId: createdBy,
       afterData: course,
     });
+
+    if (course.cupo_maximo <= course.inscritos) {
+      await createNotification({
+        audienceRole: 'admin',
+        kind: notificationKinds.courseFull,
+        title: 'Curso lleno',
+        body: `El curso ${course.name} quedó lleno al crearse.`,
+        payload: { courseId: course.id },
+      });
+    }
 
     return course;
   });
@@ -200,6 +236,7 @@ export async function updateCourse(id: number, patch: Partial<CourseInput>, upda
       description: patch.description ?? before.description,
       category: patch.category ?? before.category,
       level: patch.level ?? before.level,
+      facilitatorId: patch.facilitatorId ?? before.facilitator_id,
       instructor: patch.instructor ?? before.instructor,
       instructorBio: patch.instructorBio ?? before.instructor_bio,
       price: patch.price ?? before.price,
@@ -224,23 +261,25 @@ export async function updateCourse(id: number, patch: Partial<CourseInput>, upda
         description = $3,
         category = $4,
         level = $5,
-        instructor = $6,
-        instructor_bio = $7,
-        price = $8,
-        price_original = $9,
-        image = $10,
-        fecha_inicio = $11,
-        fecha_fin = $12,
-        horario = $13,
-        ubicacion = $14,
-        departamento = $15,
-        municipio = $16,
-        lat = $17,
-        lng = $18,
-        cupo_maximo = $19,
-        estado = $20,
-        tags = $21,
-        updated_by = $22,
+        facilitator_id = $6,
+        instructor = $7,
+        instructor_bio = $8,
+        price = $9,
+        price_original = $10,
+        image = $11,
+        fecha_inicio = $12,
+        fecha_fin = $13,
+        horario = $14,
+        ubicacion = $15,
+        departamento = $16,
+        municipio = $17,
+        lat = $18,
+        lng = $19,
+        cupo_maximo = $20,
+        estado = $21,
+        tags = $22,
+        public_enrollment_token = $23,
+        updated_by = $24,
         updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -250,6 +289,7 @@ export async function updateCourse(id: number, patch: Partial<CourseInput>, upda
         next.description,
         next.category,
         next.level,
+        next.facilitatorId ?? null,
         next.instructor,
         next.instructorBio ?? null,
         next.price,
@@ -266,6 +306,7 @@ export async function updateCourse(id: number, patch: Partial<CourseInput>, upda
         next.cupoMaximo,
         next.estado,
         JSON.stringify(next.tags),
+        before.public_enrollment_token,
         updatedBy,
       ],
     );

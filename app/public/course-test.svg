@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" fill="none">
+  <rect width="1200" height="800" fill="#f3ead9"/>
+  <rect x="80" y="80" width="1040" height="640" rx="40" fill="#ffffff" stroke="#a38a61" stroke-opacity="0.35" stroke-width="5"/>
+  <rect x="140" y="140" width="920" height="420" rx="28" fill="#1f1a17"/>
+  <circle cx="600" cy="330" r="92" fill="#d6b25e" fill-opacity="0.95"/>
+  <path d="M520 470L600 390L680 470H520Z" fill="#f7f0e3"/>
+  <text x="600" y="620" text-anchor="middle" fill="#1f1a17" font-family="Arial, sans-serif" font-size="54" font-weight="700">ACOES</text>
+  <text x="600" y="670" text-anchor="middle" fill="#6f5b38" font-family="Arial, sans-serif" font-size="28">Curso de prueba</text>
+</svg>

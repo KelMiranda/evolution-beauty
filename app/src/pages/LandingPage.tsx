@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import logoAcoes from '../../assets/logo.png'
 import { AnimatedText, FadeIn, CountUp, MagneticButton, PageTransition } from '@/components/animations'
 import {
   ClipboardList, Database, CheckCircle,
-  ArrowRight, Users, GraduationCap
+  ArrowRight, Users, GraduationCap, PhoneCall, Mail, MapPin, Sparkles, Clock3, Facebook
 } from 'lucide-react'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -81,9 +82,12 @@ export function LandingPage() {
             {/* Left */}
             <div>
               <div className="hero-label overflow-hidden">
-                <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-gold/80 inline-block">
-                  Asociación de Cosmetólogas y Estilistas de El Salvador
-                </span>
+                <div className="inline-flex items-center gap-4">
+                  <img src={logoAcoes} alt="Logo ACOES" className="h-16 w-16 md:h-20 md:w-20 object-contain rounded-full bg-white p-1 shadow-lg" />
+                  <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-gold/80 inline-block">
+                    Asociación de Cosmetólogas y Estilistas de El Salvador
+                  </span>
+                </div>
               </div>
 
               <div className="mt-8 space-y-1" style={{ perspective: '1000px' }}>
@@ -96,21 +100,21 @@ export function LandingPage() {
                 <div className="hero-title-line overflow-hidden">
                   <span className="font-display italic text-gold text-4xl md:text-5xl lg:text-6xl leading-[1.1] block"
                     style={{ transformStyle: 'preserve-3d' }}>
-                    Portal de registro
+                    Formación y respaldo profesional
                   </span>
                 </div>
               </div>
 
               <AnimatedText className="hero-subtitle mt-6 text-warm-gray max-w-lg leading-relaxed text-base" scrollTrigger={false}>
-                Centraliza el registro, la validación y el acceso interno al directorio de ACOES con una experiencia clara y profesional.
+                Respaldamos el trabajo de los profesionales de la belleza en El Salvador y fuera del país con capacitaciones especializadas, acompañamiento cercano y una experiencia digital más profesional.
               </AnimatedText>
 
               <div className="mt-8 space-y-3">
                 {[
-                  'Acceso público para conocer ACOES',
-                  'Registro guiado y validado antes de guardar',
-                  'Base central para seguimiento interno',
-                  'Cursos y capacitaciones con cupos en vivo',
+                  'Respaldo para profesionales de belleza',
+                  'Capacitaciones especializadas y actualizadas',
+                  'Cursos con cupo disponible y seguimiento en vivo',
+                  'Asesoría y contacto directo con ACOES',
                 ].map((text, i) => (
                   <div key={i} className="hero-bullet flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full bg-gold/10 flex items-center justify-center flex-shrink-0">
@@ -127,10 +131,10 @@ export function LandingPage() {
                   className="inline-flex items-center gap-2 px-7 py-3.5 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-colors"
                   onClick={() => window.location.hash = '#/registro'}
                 >
-                  Ir al registro <ArrowRight className="w-4 h-4" />
+                  Solicitar asesoría <ArrowRight className="w-4 h-4" />
                 </MagneticButton>
                 <Link to="/cursos" className="group inline-flex items-center gap-2 px-7 py-3.5 border border-warm-tan/20 text-ivory/80 text-sm rounded-xl hover:border-gold/40 hover:text-gold hover:bg-gold/5 transition-all duration-300">
-                  <GraduationCap className="w-4 h-4 group-hover:scale-110 transition-transform" /> Ver cursos
+                  <GraduationCap className="w-4 h-4 group-hover:scale-110 transition-transform" /> Ver capacitaciones
                 </Link>
               </div>
             </div>
@@ -150,9 +154,9 @@ export function LandingPage() {
                   </div>
                   <div className="space-y-2.5">
                     {[
-                      { num: '156', label: 'Registrados' },
-                      { num: '6', label: 'Cursos activos' },
-                      { num: '43', label: 'Facilitadoras' },
+                      { num: '03', label: 'Capacitaciones' },
+                      { num: '01', label: 'Asociación' },
+                      { num: '24/7', label: 'Acompañamiento' },
                     ].map((item, i) => (
                       <div key={i} className="hero-card-step flex items-center gap-3 p-3 bg-charcoal/60 rounded-xl hover:bg-charcoal transition-colors cursor-default">
                         <div className="w-9 h-9 rounded-lg bg-gold/10 flex items-center justify-center">
@@ -164,6 +168,16 @@ export function LandingPage() {
                   </div>
                   <div className="mt-5 h-11 bg-gold/5 rounded-xl flex items-center justify-center border border-gold/10">
                     <span className="font-mono text-[10px] tracking-[0.15em] text-gold uppercase">ACOES · Premium</span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-[11px] text-warm-gray">
+                    <div className="rounded-xl border border-warm-tan/10 bg-charcoal/70 p-3">
+                      <Sparkles className="w-4 h-4 text-gold mb-2" />
+                      Educación completa e integral
+                    </div>
+                    <div className="rounded-xl border border-warm-tan/10 bg-charcoal/70 p-3">
+                      <MapPin className="w-4 h-4 text-gold mb-2" />
+                      Presencia nacional e internacional
+                    </div>
                   </div>
                 </div>
                 {/* Glow behind card */}
@@ -186,18 +200,24 @@ export function LandingPage() {
           <div className="max-w-7xl mx-auto px-6">
             <div className="text-center mb-20">
               <FadeIn>
-                <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-gold/70">Servicios</span>
+                <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-gold/70">ACOES</span>
               </FadeIn>
               <FadeIn delay={0.1}>
-                <h2 className="mt-5 font-display text-4xl md:text-5xl text-ivory">Un portal completo para ACOES</h2>
+                <h2 className="mt-5 font-display text-4xl md:text-5xl text-ivory">Respaldo, formación y crecimiento profesional</h2>
+              </FadeIn>
+              <FadeIn delay={0.2}>
+                <p className="mt-4 text-warm-gray max-w-3xl mx-auto leading-relaxed">
+                  En ACOES impulsamos el trabajo de cosmetólogas, estilistas y profesionales de la belleza con capacitaciones actuales,
+                  modelos de enseñanza innovadores y un acompañamiento cercano para fortalecer su negocio y su desarrollo profesional.
+                </p>
               </FadeIn>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6">
               {[
-                { icon: ClipboardList, num: '01', title: 'Registro de participantes', desc: 'Formulario estructurado multi-paso con validación en tiempo real y confirmación previa.' },
-                { icon: Database, num: '02', title: 'Base central', desc: 'Todos los registros en un solo lugar. Busca, filtra, exporta y gestiona la información.' },
-                { icon: GraduationCap, num: '03', title: 'Cursos y capacitaciones', desc: 'Catálogo de cursos con inscripción en línea, cupos en tiempo real y mapa de ubicación.' },
+                { icon: ClipboardList, num: '01', title: 'Técnico educador en estética y belleza', desc: 'Capacitación especializada para fortalecer la enseñanza y el desarrollo profesional en estética y belleza.' },
+                { icon: GraduationCap, num: '02', title: 'Formador de formadores', desc: 'Programa diseñado para formar profesionales capaces de multiplicar conocimiento y liderar procesos de enseñanza.' },
+                { icon: Database, num: '03', title: 'Técnico en barbería profesional', desc: 'Formación enfocada en técnicas modernas de barbería con un enfoque práctico y profesional.' },
               ].map((service, i) => (
                 <FadeIn key={i} delay={i * 0.15} direction="up" distance={40}>
                   <div className="group relative bg-charcoal rounded-2xl p-8 border border-warm-tan/[0.08] hover:border-gold/20 transition-all duration-500 hover:-translate-y-2 hover:shadow-glow overflow-hidden">
@@ -224,10 +244,10 @@ export function LandingPage() {
           <div className="max-w-5xl mx-auto px-6 relative z-10">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
               {[
-                { value: 156, label: 'Registrados', suffix: '+' },
-                { value: 6, label: 'Cursos', suffix: '' },
-                { value: 43, label: 'Facilitadoras', suffix: '' },
-                { value: 98, label: 'Participantes', suffix: '%' },
+                { value: 3, label: 'Capacitaciones', suffix: '' },
+                { value: 1, label: 'Asociación', suffix: '' },
+                { value: 100, label: 'Respaldo', suffix: '%' },
+                { value: 24, label: 'Acompañamiento', suffix: '/7' },
               ].map((stat, i) => (
                 <FadeIn key={i} delay={i * 0.12} direction="up" distance={30}>
                   <div className="text-center group">
@@ -242,6 +262,98 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* Contact Section */}
+        <section id="contacto" className="py-28 bg-charcoal relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-warm-tan/10 to-transparent" />
+          <div className="max-w-7xl mx-auto px-6 relative">
+            <div className="grid lg:grid-cols-2 gap-10 items-start">
+              <FadeIn direction="left" distance={40}>
+                <div>
+                  <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-gold/70">Contacto</span>
+                  <h2 className="mt-5 font-display text-4xl md:text-5xl text-ivory leading-tight">
+                    Estamos para asesorarte
+                  </h2>
+                  <p className="mt-4 text-warm-gray max-w-xl leading-relaxed">
+                    Si deseas información sobre capacitaciones, registro, asesoría o seguimiento de procesos, puedes comunicarte con nosotros por teléfono, correo o visitarnos.
+                  </p>
+
+                  <div className="mt-8 grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-warm-tan/10 bg-charcoal-light p-5">
+                      <div className="flex items-center gap-3 text-gold">
+                        <PhoneCall className="w-4 h-4" />
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-gold/70">Teléfono</span>
+                      </div>
+                      <p className="mt-3 text-ivory text-sm">(503) 6301-0433</p>
+                    </div>
+                    <div className="rounded-2xl border border-warm-tan/10 bg-charcoal-light p-5">
+                      <div className="flex items-center gap-3 text-gold">
+                        <Mail className="w-4 h-4" />
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-gold/70">Correo</span>
+                      </div>
+                      <p className="mt-3 text-ivory text-sm break-all">gerencia.acoes@gmail.com</p>
+                    </div>
+                    <div className="rounded-2xl border border-warm-tan/10 bg-charcoal-light p-5">
+                      <div className="flex items-center gap-3 text-gold">
+                        <MapPin className="w-4 h-4" />
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-gold/70">Dirección</span>
+                      </div>
+                      <p className="mt-3 text-ivory text-sm">25 Avenida Sur, mercado Cuscatlán, segundo nivel, San Salvador</p>
+                    </div>
+                    <div className="rounded-2xl border border-warm-tan/10 bg-charcoal-light p-5">
+                      <div className="flex items-center gap-3 text-gold">
+                        <Clock3 className="w-4 h-4" />
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-gold/70">Horario</span>
+                      </div>
+                      <p className="mt-3 text-ivory text-sm">Lunes a viernes: 8:00 a. m. - 5:00 p. m.</p>
+                      <p className="text-warm-gray text-xs mt-1">Sábado y domingo: cerrado</p>
+                    </div>
+                  </div>
+                </div>
+              </FadeIn>
+
+              <FadeIn direction="right" distance={40} delay={0.1}>
+                <div className="rounded-3xl border border-warm-tan/10 bg-charcoal-light p-6 md:p-8">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="rounded-xl bg-gold/10 p-3 text-gold">
+                      <Facebook className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-display text-lg text-ivory">Redes y cita</p>
+                      <p className="text-sm text-warm-gray">Mantente en contacto con ACOES</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 text-sm text-warm-gray leading-relaxed">
+                    <p>
+                      Para reservar una cita o solicitar acompañamiento, llama al número indicado o escríbenos al correo institucional.
+                    </p>
+                    <p>
+                      También puedes visitar nuestras redes para conocer más sobre nuestras capacitaciones, actividades y referencias.
+                    </p>
+                  </div>
+
+                  <div className="mt-6 flex flex-col sm:flex-row gap-4">
+                    <a
+                      href="mailto:gerencia.acoes@gmail.com"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-gold px-5 py-3 text-sm font-medium text-charcoal hover:bg-gold-light transition-colors"
+                    >
+                      <Mail className="w-4 h-4" /> Escribir correo
+                    </a>
+                    <a
+                      href="https://www.facebook.com/SVACOES"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-warm-tan/20 px-5 py-3 text-sm font-medium text-ivory hover:border-gold/40 hover:text-gold transition-colors"
+                    >
+                      <Facebook className="w-4 h-4" /> Ver Facebook
+                    </a>
+                  </div>
+                </div>
+              </FadeIn>
+            </div>
+          </div>
+        </section>
+
         {/* CTA Section */}
         <section className="py-28 bg-charcoal-light relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-warm-tan/10 to-transparent" />
@@ -250,12 +362,12 @@ export function LandingPage() {
             <div className="flex flex-col md:flex-row items-center justify-between gap-10">
               <FadeIn direction="left" distance={50}>
                 <div>
-                  <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-gold/70">Comienza ahora</span>
+                  <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-gold/70">Contáctanos</span>
                   <h2 className="mt-5 font-display text-4xl md:text-5xl text-ivory leading-tight">
-                    Regístrate o explora<br />nuestros cursos
+                    Tu mejor negocio<br />merece respaldo
                   </h2>
                   <p className="mt-4 text-warm-gray max-w-lg leading-relaxed">
-                    Forma parte de ACOES y accede a capacitaciones de excelencia impartidas por profesionales del sector.
+                    Programa una llamada y conoce más sobre nuestras capacitaciones especializadas, el respaldo profesional y cómo formar parte de ACOES.
                   </p>
                 </div>
               </FadeIn>
@@ -266,17 +378,30 @@ export function LandingPage() {
                     className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-colors"
                     onClick={() => window.location.hash = '#/registro'}
                   >
-                    Ir al registro <ArrowRight className="w-4 h-4" />
+                    <PhoneCall className="w-4 h-4" /> Programa una llamada
                   </MagneticButton>
                   <MagneticButton
                     strength={0.2}
                     className="inline-flex items-center justify-center gap-2 px-8 py-4 border border-warm-tan/20 text-ivory text-sm rounded-xl hover:border-gold/40 hover:bg-gold/5 transition-all"
                     onClick={() => window.location.hash = '#/cursos'}
                   >
-                    <GraduationCap className="w-4 h-4" /> Ver cursos
+                    <Mail className="w-4 h-4" /> Ver capacitaciones
                   </MagneticButton>
                 </div>
               </FadeIn>
+            </div>
+
+            <div className="mt-12 grid gap-4 md:grid-cols-3">
+              {[
+                { title: 'Teléfono', value: '(503) 6301-0433' },
+                { title: 'Correo', value: 'gerencia.acoes@gmail.com' },
+                { title: 'Cobertura', value: 'El Salvador y fuera del país' },
+              ].map((item) => (
+                <div key={item.title} className="rounded-2xl border border-warm-tan/10 bg-charcoal/50 p-5">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-gold/60">{item.title}</p>
+                  <p className="mt-2 text-sm text-ivory">{item.value}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>

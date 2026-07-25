@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, ChevronRight, ChevronLeft, CheckCircle2, User, Phone, BookOpen } from 'lucide-react'
-import { createRegistro } from '@/services/api'
+import { createRegistro, getCursos } from '@/services/api'
 import { departamentosElSalvador, municipiosPorDepartamento, funcionesACOES, nivelesEducativos, paisesCentroamerica } from '@/data/mockData'
 import type { Registro } from '@/types'
 
@@ -12,6 +12,7 @@ const steps = [
 ]
 
 const initialForm: Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado'> = {
+  courseId: '',
   nombre: '', dui: '', fechaNacimiento: '', genero: '', pais: 'El Salvador',
   prefijo: '+503', celular: '', correo: '', direccion: '', distrito: '',
   departamento: '', municipio: '', entidad: '', funcion: '',
@@ -24,8 +25,15 @@ export function RegistroPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [newRegistro, setNewRegistro] = useState<Registro | null>(null)
+  const [submissionError, setSubmissionError] = useState('')
+  const [cursos, setCursos] = useState<Array<{ id: string; nombre: string }>>([])
 
-  useEffect(() => { window.scrollTo(0, 0) }, [])
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    getCursos({ estado: 'enrolling' })
+      .then(data => setCursos(data.map(curso => ({ id: curso.id, nombre: curso.nombre }))))
+      .catch(console.error)
+  }, [])
 
   const updateField = (field: string, value: string | boolean) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -49,6 +57,7 @@ export function RegistroPage() {
       if (!form.municipio) newErrors.municipio = 'Selecciona'
     }
     if (step === 3) {
+      if (!form.courseId) newErrors.courseId = 'Selecciona'
       if (!form.entidad.trim()) newErrors.entidad = 'Requerido'
       if (!form.funcion) newErrors.funcion = 'Selecciona'
       if (!form.autorizaDatos) newErrors.autorizaDatos = 'Debes autorizar'
@@ -58,19 +67,26 @@ export function RegistroPage() {
   }
 
   const nextStep = () => {
-    if (!validateStep()) return
+    if (!validateStep()) return false
     if (step < 3) setStep(s => s + 1)
     else handleSubmit()
+    return true
   }
 
   const prevStep = () => { setStep(s => s - 1) }
 
   const handleSubmit = async () => {
+    setSubmissionError('')
     try {
       const result = await createRegistro(form)
       setNewRegistro(result)
+    } catch (err) {
+      console.error(err)
+      setSubmissionError('No se pudo completar el registro')
+    }
+    finally {
       setSubmitted(true)
-    } catch (err) { console.error(err) }
+    }
   }
 
   const municipios = form.departamento ? municipiosPorDepartamento[form.departamento] || [] : []
@@ -92,6 +108,7 @@ export function RegistroPage() {
       { label: 'Municipio', value: form.municipio },
     ]},
     { title: 'Adicional', fields: [
+      { label: 'Curso', value: cursos.find(curso => curso.id === form.courseId)?.nombre ?? '' },
       { label: 'Entidad', value: form.entidad },
       { label: 'Función', value: form.funcion },
       { label: 'Nivel educativo', value: form.nivelEducativo },
@@ -99,7 +116,7 @@ export function RegistroPage() {
     ]},
   ]
 
-  if (submitted && newRegistro) {
+  if (submitted) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-6 py-20 bg-charcoal">
         <div className="max-w-md w-full text-center">
@@ -110,8 +127,9 @@ export function RegistroPage() {
           <p className="mt-3 text-warm-gray">Tu información ha sido guardada.</p>
           <div className="mt-6 bg-charcoal-light rounded-xl p-6 border border-warm-tan/10">
             <span className="font-mono text-[10px] tracking-wider uppercase text-warm-gray">Código</span>
-            <p className="mt-1 font-mono text-2xl text-gold">{newRegistro.codigo}</p>
+            <p className="mt-1 font-mono text-2xl text-gold">{newRegistro?.codigo ?? 'PENDIENTE'}</p>
           </div>
+          {submissionError && <p className="mt-4 text-sm text-error">{submissionError}</p>}
           <div className="mt-8 flex gap-4 justify-center">
             <button onClick={() => { setSubmitted(false); setStep(1); setForm(initialForm) }} className="px-6 py-2.5 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-colors">
               Nuevo registro
@@ -123,6 +141,15 @@ export function RegistroPage() {
         </div>
       </div>
     )
+  }
+
+  const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (step === 3) {
+      handleSubmit()
+      return
+    }
+    nextStep()
   }
 
   return (
@@ -171,7 +198,7 @@ export function RegistroPage() {
 
           {/* Form */}
           <div className="lg:col-span-8">
-            <div className="bg-charcoal-light rounded-2xl border border-warm-tan/10 p-6 md:p-10">
+            <form className="bg-charcoal-light rounded-2xl border border-warm-tan/10 p-6 md:p-10" onSubmit={handleFormSubmit}>
               {step === 3 && (
                 <div className="mb-8">
                   <h3 className="font-display text-xl text-ivory">Revisa tu información</h3>
@@ -234,6 +261,14 @@ export function RegistroPage() {
 
                   <div className="space-y-5">
                     <h3 className="font-display text-xl text-ivory">Información adicional</h3>
+                    <div>
+                      <label htmlFor="courseId" className="text-[10px] text-warm-gray uppercase tracking-wider">Curso</label>
+                      <select id="courseId" name="courseId" aria-label="Curso" value={form.courseId} onChange={e => updateField('courseId', e.target.value)} className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 appearance-none transition-all ${errors.courseId ? 'border-error/50' : 'border-warm-tan/20'}`}>
+                        <option value="">Selecciona</option>
+                        {cursos.map(curso => <option key={curso.id} value={curso.id}>{curso.nombre}</option>)}
+                      </select>
+                      {errors.courseId && <p className="mt-1 text-xs text-error">{errors.courseId}</p>}
+                    </div>
                     <Field label="Entidad / organización" value={form.entidad} onChange={v => updateField('entidad', v)} error={errors.entidad} />
                     <div className="grid md:grid-cols-2 gap-5">
                       <Select label="Función en ACOES" value={form.funcion} onChange={v => updateField('funcion', v)} error={errors.funcion} options={funcionesACOES} />
@@ -241,11 +276,11 @@ export function RegistroPage() {
                     </div>
                     <Field label="Capacitación" value={form.capacitacion} onChange={v => updateField('capacitacion', v)} placeholder="Ej: taller o seguimiento" />
                     <div>
-                      <label className="text-[10px] text-warm-gray uppercase tracking-wider">Observaciones</label>
-                      <textarea value={form.observaciones} onChange={e => updateField('observaciones', e.target.value)} placeholder="Notas adicionales" className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray/50 focus:outline-none focus:border-gold/50 resize-none h-24" />
+                      <label htmlFor="observaciones" className="text-[10px] text-warm-gray uppercase tracking-wider">Observaciones</label>
+                      <textarea id="observaciones" name="observaciones" aria-label="Observaciones" value={form.observaciones} onChange={e => updateField('observaciones', e.target.value)} placeholder="Notas adicionales" className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray/50 focus:outline-none focus:border-gold/50 resize-none h-24" />
                     </div>
                     <label className="flex items-start gap-3 cursor-pointer">
-                      <input type="checkbox" checked={form.autorizaDatos} onChange={e => updateField('autorizaDatos', e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-warm-tan/20 bg-charcoal text-gold focus:ring-gold/20" />
+                      <input type="checkbox" name="autorizaDatos" aria-label="Autorizo el uso de mis datos para fines del registro ACOES" checked={form.autorizaDatos} onChange={e => updateField('autorizaDatos', e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-warm-tan/20 bg-charcoal text-gold focus:ring-gold/20" />
                       <span className="text-sm text-ivory/70">Autorizo el uso de mis datos para fines del registro ACOES</span>
                     </label>
                     {errors.autorizaDatos && <p className="text-xs text-error">{errors.autorizaDatos}</p>}
@@ -256,15 +291,15 @@ export function RegistroPage() {
               {/* Nav buttons */}
               <div className="mt-10 flex items-center justify-between pt-6 border-t border-warm-tan/10">
                 {step > 1 ? (
-                  <button onClick={prevStep} className="flex items-center gap-2 px-5 py-2.5 text-sm text-warm-gray hover:text-ivory transition-colors">
+                  <button type="button" onClick={prevStep} className="flex items-center gap-2 px-5 py-2.5 text-sm text-warm-gray hover:text-ivory transition-colors">
                     <ChevronLeft className="w-4 h-4" /> Anterior
                   </button>
                 ) : <div />}
-                <button onClick={nextStep} className="flex items-center gap-2 px-6 py-3 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-all">
+                <button type="submit" className="flex items-center gap-2 px-6 py-3 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-all">
                   {step === 3 ? 'Confirmar registro' : 'Siguiente'} <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       </div>
@@ -275,10 +310,11 @@ export function RegistroPage() {
 function Field({ label, type = 'text', value, onChange, error, placeholder, disabled }: {
   label: string; type?: string; value: string; onChange: (v: string) => void; error?: string; placeholder?: string; disabled?: boolean
 }) {
+  const id = label.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   return (
     <div>
-      <label className="text-[10px] text-warm-gray uppercase tracking-wider">{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+      <label htmlFor={id} className="text-[10px] text-warm-gray uppercase tracking-wider">{label}</label>
+      <input id={id} name={id} aria-label={label} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
         className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory placeholder:text-warm-gray/50 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all ${error ? 'border-error/50' : 'border-warm-tan/20'} ${disabled ? 'opacity-50' : ''}`} />
       {error && <p className="mt-1 text-xs text-error">{error}</p>}
     </div>
@@ -288,10 +324,11 @@ function Field({ label, type = 'text', value, onChange, error, placeholder, disa
 function Select({ label, value, onChange, error, options, disabled }: {
   label: string; value: string; onChange: (v: string) => void; error?: string; options: string[]; disabled?: boolean
 }) {
+  const id = label.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   return (
     <div>
-      <label className="text-[10px] text-warm-gray uppercase tracking-wider">{label}</label>
-      <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
+      <label htmlFor={id} className="text-[10px] text-warm-gray uppercase tracking-wider">{label}</label>
+      <select id={id} name={id} aria-label={label} value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
         className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 appearance-none transition-all ${error ? 'border-error/50' : 'border-warm-tan/20'} ${disabled ? 'opacity-50' : ''}`}>
         <option value="">Selecciona</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}

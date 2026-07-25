@@ -66,7 +66,7 @@ export function LoginPage() {
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-warm-gray/30" />
                     <input type="email" value={correo} onChange={e => { setCorreo(e.target.value); setError('') }}
                       className="w-full pl-11 pr-4 py-3.5 bg-charcoal border border-warm-tan/15 rounded-xl text-sm text-ivory placeholder:text-warm-gray/30 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/40 transition-all"
-                      placeholder="correo@ejemplo.com" />
+                      placeholder="correo@ejemplo.com" aria-label="Correo electrónico" />
                   </div>
                 </div>
 
@@ -76,7 +76,7 @@ export function LoginPage() {
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-warm-gray/30" />
                     <input type={showPass ? 'text' : 'password'} value={contrasena} onChange={e => { setContrasena(e.target.value); setError('') }}
                       className="w-full pl-11 pr-12 py-3.5 bg-charcoal border border-warm-tan/15 rounded-xl text-sm text-ivory placeholder:text-warm-gray/30 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/40 transition-all"
-                      placeholder="••••••••" />
+                      placeholder="••••••••" aria-label="Contraseña" />
                     <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-4 top-1/2 -translate-y-1/2 text-warm-gray/40 hover:text-ivory transition-colors">
                       {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>

@@ -131,6 +131,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   try {
     const participant = await createParticipant(
       {
+        courseId: parsed.data.courseId,
         fullName: parsed.data.fullName,
         documentNumber: parsed.data.documentNumber,
         birthDate: parsed.data.birthDate,

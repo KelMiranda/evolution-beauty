@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { getCurrentUser } from '../../lib/server/auth';
 import { ensureDatabase } from '../../lib/server/bootstrap';
-import { canManageUsers } from '../../lib/server/permissions';
+import { canManageUsers, normalizeRole } from '../../lib/server/permissions';
 import { createUser, deactivateUser, listUsers, updateUser } from '../../lib/server/users';
 import { userSubmissionSchema } from '../../lib/server/user-schema';
 
@@ -11,7 +11,7 @@ const patchSchema = z.object({
   id: z.number(),
   email: z.string().email().optional(),
   fullName: z.string().min(1).optional(),
-  role: z.enum(['admin', 'facilitadora', 'participante']).optional(),
+  role: z.string().optional().transform((value) => (value ? normalizeRole(value) : undefined)),
   active: z.boolean().optional(),
   password: z.string().min(6).optional(),
 });

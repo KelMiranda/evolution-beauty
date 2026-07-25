@@ -7,3 +7,9 @@ cookie.txt
 .idea/
 .vscode/
 .atl/
+
+# Playwright test output (regenerated on every run)
+playwright-report/
+test-results/
+app/playwright-report/
+app/test-results/
