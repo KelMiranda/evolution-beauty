@@ -289,3 +289,105 @@ All six requirement headings and all ten scenarios in the notification spec pass
 
 PR5 owns the real `test:unit` CI gate, PostgreSQL service, restored Playwright job, and repair/removal of the three parked component suites. PR4 does not modify CI or React test infrastructure.
 
+## PR5 — ci-and-component-tests — DONE
+
+**Status**: success
+**Capability**: ci-and-component-tests
+**Estimated changed lines**: ~165 (actual implementation/test/CI diff: 546 changed lines — 245 insertions / 301 deletions across 8 files; the removed 196-line parked suite and replacement of the 40-line commented E2E skeleton dominate the delta; still within the 800-line review budget)
+**Date**: 2026-07-24
+
+### Commits (work-unit, in order)
+
+1. `afd8699` — `chore(app): add test:unit script`
+2. `9af3269` — `test(spa): repair component suites after Astro removal`
+3. `17ae309` — `ci: re-enable Playwright with PostgreSQL`
+
+### Files created
+
+- `app/tests/e2e/public-registration-rejected.spec.ts` (24 lines) — direct API regression test proving `gender: 'Otro'` returns 400 + a `gender` issue.
+
+### Files modified
+
+- `.github/workflows/ci.yml` (204 lines; +143/-40) — direct backend/React test gates, dependency caches, live PostgreSQL-backed E2E job, health/wait checks, both builds, Chromium install, and CI retries.
+- `app/package.json` (96 lines; +1) — adds `test:unit` while preserving `test:run`.
+- `app/tests/component/LoginPage.test.tsx` (113 lines; +31/-36) — React `LoginPage` rewire, current selectors/defaults, same-package router, shared MSW server, and real credential payload assertion.
+- `app/tests/component/CoursesCatalogPage.test.tsx` (199 lines; +22/-28) — React `CatalogoCursosPage` rewire, same-package router, shared MSW handlers, and settled async assertions.
+- `app/tests/setup.ts` (189 lines; +22/-1) — shared jsdom `matchMedia` and `scrollTo` browser-contract stubs required by GSAP-backed React pages.
+- `app/vitest.config.ts` (37 lines; +2) — records why the Astro-only admin participants suite was intentionally removed.
+- `openspec/changes/acoes-post-migration-hardening/tasks.md` (793 lines on disk, still part of the pre-existing untracked planning set) — PR5 tasks 23-29 marked complete; prior task state preserved.
+- `openspec/changes/acoes-post-migration-hardening/apply-progress.md` (393 lines; FINAL cumulative PR1-PR5 report) — this merged section; prior PR1-PR4 evidence preserved.
+
+### File deleted
+
+- `app/tests/component/AdminParticipantsPage.test.tsx` (196 lines before deletion) — the imported admin participants page has no React equivalent and React admin parity remains explicitly parked.
+
+### Component-suite repair decisions
+
+| Suite | Before | Decision | After |
+|-------|--------|----------|-------|
+| `LoginPage` | Failed at import resolution for deleted `@/pages/login`; 5 tests never collected. | Rewired to named React export `@/pages/LoginPage`, moved to `react-router-dom`'s matching router context, reused shared MSW, and aligned assertions to the active form. A code comment records the Astro-to-React rewire. | 5/5 pass. |
+| `CoursesCatalogPage` | Failed at import resolution for deleted `@/pages/courses/index`; 8 tests never collected. | Rewired to `CatalogoCursosPage`, used the matching router package and shared API handlers, and waited for async loading before assertions. A code comment records the rewire. | 8/8 pass. |
+| `AdminParticipantsPage` | Failed at import resolution for deleted `@/pages/admin/participants`; 6 tests never collected. | Removed because no equivalent React route exists and that parity is out of scope. `app/vitest.config.ts` carries the future-reader comment and says when coverage should return. | Removed intentionally; no stale reference remains. |
+
+The baseline had 51 passing React tests plus 3 import-failing suites. The repaired run has **64 passing tests** across 8 files and **0 broken suites**: +13 collected/passing component tests from Login and Catalog; the 6 deleted-feature tests were removed rather than misrepresenting nonexistent behavior.
+
+### CI workflow changes
+
+- `test` now runs backend `npm test` and React `npm run test:unit` directly; `--if-present` is gone, so a missing script or failing suite exits non-zero.
+- `node_modules` and `app/node_modules` are cached from both lockfiles in test, E2E, and type-check jobs; cold misses run `npm ci` in both workspaces.
+- `e2e` now depends on `test` and starts `postgres:16-alpine` with the docker-compose database/user/password, port 5432, and `pg_isready -U acoes -d acoes_local` healthcheck.
+- The backend receives `DATABASE_URL=postgres://acoes:acoes@localhost:5432/acoes_local`; disposable CI credentials intentionally mirror docker-compose and are not production secrets.
+- An early configuration guard emits `::error::Missing secret or CI variable: <name>` and exits 1 if `DATABASE_URL` or `POSTGRES_PASSWORD` is empty.
+- `wait-on@8.0.3` checks PostgreSQL and the backend; failures emit an explicit `database unavailable` / backend-startup diagnostic before Playwright starts.
+- Both backend and React builds run, Chromium installs with OS dependencies, and `CI: 'true'` activates the existing `retries: 2` plus `trace: 'on-first-retry'` in `app/playwright.config.ts`.
+- Playwright owns SPA startup through its `webServer` config; the workflow does not launch a conflicting second Vite process when `reuseExistingServer` is false in CI.
+
+### Verification
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Backend Vitest (`npm test`) | pass | 8 files, 22 tests passed. |
+| React Vitest alias (`cd app && npm run test:run`) | pass | 8 files, 64 tests passed; broken suites remaining: 0. |
+| New CI command (`cd app && npm run test:unit`) | pass | 8 files, 64 tests passed; command exists and exits zero. |
+| Focused repaired suites | pass | `LoginPage` 5/5 + `CatalogoCursosPage` 8/8 = 13/13 passed. |
+| Backend build (`npm run build`) | pass | `astro check`: 0 errors; server build complete. Existing unused-variable hint in `scripts/seed.ts` remains. |
+| React build (`cd app && npm run build`) | pass | `tsc -b && vite build` complete; existing 919.12 kB chunk warning remains. |
+| Focused rejection E2E | pass | 1/1 passed; invalid `Otro` payload returned 400 + `gender` issue. |
+| Full E2E (`cd app && npm run test:e2e`) | pass | 10/10 passed in 7.0s (9 existing + 1 rejection regression). |
+| CI YAML parse/structure | pass | `js-yaml` parsed `test`, `e2e`, and `lint`; programmatic assertions found Postgres image/healthcheck, exact localhost URL, direct unit command, and `CI: 'true'`. |
+| Docker Compose compatibility | pass | `docker compose config` exited zero. |
+| Deleted imports/files | pass | No deleted-page or `.astro` import remains in component tests; `AdminParticipantsPage.test.tsx` is absent. |
+| Hosted GitHub Actions execution | not run by instruction | Static workflow validation passed. First hosted service/cache run remains the verify/first-push risk. |
+
+### Spec scenarios status
+
+From `openspec/changes/acoes-post-migration-hardening/specs/ci-and-component-tests/spec.md`:
+
+| Requirement / scenario | Status | Evidence |
+|------------------------|--------|----------|
+| `test:unit` exists and runs the React suites | pass | Direct command ran 8 files / 64 tests and exited zero. |
+| Missing `test:unit` cannot silently skip | pass | Workflow invokes `npm run test:unit` without `--if-present`. |
+| A failing React unit test fails CI | pass | Direct unguarded npm command propagates Vitest's exit code. |
+| PostgreSQL is healthy before E2E | pass (static CI + local runtime evidence) | Service has `pg_isready` healthcheck and explicit TCP wait; local full E2E passed against real docker PostgreSQL. Hosted run is intentionally deferred. |
+| PostgreSQL image/cache behavior | pass with hosted-run risk | Pinned `postgres:16-alpine` service uses the runner's image layer when available; dependency caches are explicit. A fresh hosted runner may cold-pull. |
+| Playwright E2E executes with documented retries | pass | Workflow runs `npx playwright test` with `CI: 'true'`; config sets 2 retries. Local suite passed 10/10. |
+| Unhealthy database fails clearly | pass (static) | `wait-on` failure emits `::error::database unavailable after 60 seconds` and exits before tests. |
+| Deleted-page suites compile/run against React equivalents | pass | Login and catalog collect and pass 13/13; no stale imports remain. |
+| All three previously broken suites are resolved | pass | Two rewired green; one nonexistent-feature suite intentionally removed; overall React run is 64/64. |
+| Missing database configuration fails loud | pass (static) | Early shell guard emits `Missing secret or CI variable` and exits 1 for either empty required value. |
+| Missing VAPID configuration is isolated from unit/E2E | pass for current workflow scope | No push-subscription CI step exists, so VAPID is not a required input and cannot skip/block either test layer. |
+
+All six requirement headings are implemented. The only non-runtime evidence is the hosted GitHub service lifecycle, which cannot be executed locally and is explicitly deferred to `sdd-verify` / the first GitHub run.
+
+### Deviations and risks
+
+- The design proposed `${{ secrets.POSTGRES_PASSWORD }}`. PR5 uses the exact disposable docker-compose credentials requested for the isolated CI service, so no repository DB secret is required; the fail-loud guard protects the required runtime variables instead.
+- The design showed a separately started SPA, but `playwright.config.ts` already starts Vite and sets `reuseExistingServer: false` in CI. Starting another SPA would create a deterministic port collision, so the workflow lets Playwright own that process.
+- GitHub Actions service containers start before job steps. The service healthcheck is therefore the primary gate; the explicit `wait-on` check provides the requested human-readable failure only when steps can begin.
+- A first hosted run may cold-pull PostgreSQL/Chromium or expose runner-specific timing. Mitigations: service healthcheck, explicit database/backend waits, cached dependencies, two Playwright retries, and trace-on-first-retry.
+- The React suite still prints Node's experimental localStorage warning. It is non-fatal and all 64 tests pass; changing the runtime invocation is outside this slice.
+
+### Next step: sdd-verify
+
+All five stacked-to-main apply slices are landed. Run `sdd-verify` against the cumulative recortado, then `sdd-archive` if verification passes. No further apply slice remains.
+
