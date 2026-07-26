@@ -1,17 +1,23 @@
-import { useState, useEffect, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect, useMemo, type FormEvent } from 'react'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Check, ChevronRight, ChevronLeft, CheckCircle2, Info, User, Phone, BookOpen } from 'lucide-react'
 import { createRegistro, getCursos, ValidationApiError } from '@/services/api'
+import { safeRedirect } from '@/lib/safeRedirect'
+import { normalizeDui } from '@/lib/dui'
 import { departamentosElSalvador, municipiosPorDepartamento, nivelesEducativos, paisesCentroamerica } from '@/data/mockData'
 import type { Registro } from '@/types'
 
 /**
- * The public registration form is for PARTICIPANTS only. The `funcion`
- * field is hardcoded to "Participante" and never surfaced to the user
- * as a choice — facilitators and employees are managed by the admin
- * via the dashboard (`/dashboard/registros`).
+ * Public registration exposes only Participante and Facilitador. The admin
+ * four-value catalog (`Empleado`, `Facilitador`, `Participante`, `Otro`)
+ * remains untouched on the backend — see
+ * `openspec/changes/acoes-dui-enrollment-flow/specs/public-registration-enum-funcion/spec.md`.
+ *
+ * We inline the public two-value list here rather than importing the backend
+ * catalog to keep the SPA bundle free of server-only modules.
  */
-const PUBLIC_FORM_ROLE = 'Participante' as const
+const PUBLIC_PARTICIPANT_ROLES = ['Participante', 'Facilitador'] as const
+type PublicParticipantRole = (typeof PUBLIC_PARTICIPANT_ROLES)[number]
 
 /**
  * Maps the shared Zod schema's camelCase field names (returned in the
@@ -48,22 +54,44 @@ const steps = [
   { num: 3, title: 'Confirmar', icon: BookOpen },
 ]
 
-const initialForm: Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado'> = {
+/**
+ * Form state typed loosely: `funcion` is the user-controlled public-role
+ * selector (`'Participante' | 'Facilitador' | ''`), and `curso`/`capacitacion`
+ * are only meaningful when `funcion === 'Facilitador'`. `observaciones` is no
+ * longer surfaced in the public form but kept in the state for type
+ * compatibility with the `Registro` interface (the field is always `''`).
+ */
+type FormState = Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado' | 'funcion'> & {
+  funcion: PublicParticipantRole | ''
+}
+
+const initialForm: FormState = {
   courseId: '',
   nombre: '', dui: '', fechaNacimiento: '', genero: '', pais: 'El Salvador',
   prefijo: '+503', celular: '', correo: '', direccion: '', distrito: '',
-  departamento: '', municipio: '', entidad: '', funcion: PUBLIC_FORM_ROLE,
+  departamento: '', municipio: '', entidad: '', funcion: '',
   nivelEducativo: '', capacitacion: '', autorizaDatos: false, observaciones: '',
 }
 
 export function RegistroPage() {
   const [step, setStep] = useState(1)
-  const [form, setForm] = useState(initialForm)
+  const [form, setForm] = useState<FormState>(initialForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [newRegistro, setNewRegistro] = useState<Registro | null>(null)
   const [submissionError, setSubmissionError] = useState('')
   const [cursos, setCursos] = useState<Array<{ id: string; nombre: string }>>([])
+
+  // Read the post-registration continuation target from the URL. With
+  // HashRouter the actual URL is `/#/registro?redirect=...`, so
+  // `useSearchParams` decodes the inner query string for us. The raw value
+  // is validated by `safeRedirect` after a successful 201 response.
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const redirectTarget = useMemo(() => {
+    const raw = searchParams.get('redirect') ?? ''
+    return raw
+  }, [searchParams])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -71,6 +99,25 @@ export function RegistroPage() {
       .then(data => setCursos(data.map(curso => ({ id: curso.id, nombre: curso.nombre }))))
       .catch(console.error)
   }, [])
+
+  /**
+   * When the user toggles from `Facilitador` back to `Participante` we MUST
+   * drop any stale values the facilitator step accumulated; the public
+   * schema (PR1) treats the missing fields as no-ops but the user's
+   * intent is to register as a participant, so we keep the form state
+   * consistent with what they see on screen.
+   */
+  useEffect(() => {
+    if (form.funcion !== 'Participante') return
+    setForm(prev => (prev.courseId === '' && prev.capacitacion === '' ? prev : { ...prev, courseId: '', capacitacion: '' }))
+    setErrors(prev => {
+      if (!prev.courseId && !prev.capacitacion) return prev
+      const next = { ...prev }
+      delete next.courseId
+      delete next.capacitacion
+      return next
+    })
+  }, [form.funcion])
 
   const updateField = (field: string, value: string | boolean) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -84,6 +131,7 @@ export function RegistroPage() {
       if (!form.dui.trim()) newErrors.dui = 'Requerido'
       if (!form.fechaNacimiento) newErrors.fechaNacimiento = 'Requerido'
       if (!form.genero) newErrors.genero = 'Selecciona'
+      if (!form.funcion) newErrors.funcion = 'Selecciona'
     }
     if (step === 2) {
       if (!form.celular.trim()) newErrors.celular = 'Requerido'
@@ -94,9 +142,11 @@ export function RegistroPage() {
       if (!form.municipio) newErrors.municipio = 'Selecciona'
     }
     if (step === 3) {
-      if (!form.courseId) newErrors.courseId = 'Selecciona'
+      if (form.funcion === 'Facilitador') {
+        if (!form.courseId) newErrors.courseId = 'Selecciona'
+        if (!form.capacitacion.trim()) newErrors.capacitacion = 'Describe la capacitación'
+      }
       if (!form.entidad.trim()) newErrors.entidad = 'Requerido'
-      // `funcion` is always PUBLIC_FORM_ROLE; never validated as user input.
       if (!form.autorizaDatos) newErrors.autorizaDatos = 'Debes autorizar'
     }
     setErrors(newErrors)
@@ -114,10 +164,22 @@ export function RegistroPage() {
 
   const handleSubmit = async () => {
     setSubmissionError('')
+    // Normalize DUI on the client so the wire payload matches the canonical
+    // form before the backend re-validates. Empty input short-circuits to
+    // null so the backend's `normalizeDui` is the authoritative validator.
+    const normalizedDui = normalizeDui(form.dui)
     try {
-      const result = await createRegistro(form)
+      const result = await createRegistro({ ...form, dui: normalizedDui ?? form.dui })
       setNewRegistro(result)
       setSubmitted(true)
+      const safe = safeRedirect(redirectTarget)
+      if (safe) {
+        // Defer the navigation by a tick so the success card has a chance to
+        // paint. With HashRouter, `navigate('/cursos/9?token=XYZ')` rewrites
+        // the hash to `#/cursos/9?token=XYZ` and triggers the CursoDetallePage
+        // mount. The success card is replaced by the course detail page.
+        window.setTimeout(() => navigate(safe), 0)
+      }
     } catch (err) {
       console.error(err)
       if (err instanceof ValidationApiError) {
@@ -146,30 +208,39 @@ export function RegistroPage() {
 
   const municipios = form.departamento ? municipiosPorDepartamento[form.departamento] || [] : []
 
-  const reviewGroups = [
-    { title: 'Datos Personales', fields: [
-      { label: 'Nombre', value: form.nombre },
-      { label: 'DUI', value: form.dui },
-      { label: 'Nacimiento', value: form.fechaNacimiento },
-      { label: 'Género', value: form.genero },
-      { label: 'País', value: form.pais },
-    ]},
-    { title: 'Contacto', fields: [
-      { label: 'Celular', value: `${form.prefijo} ${form.celular}` },
-      { label: 'Correo', value: form.correo },
-      { label: 'Dirección', value: form.direccion },
-      { label: 'Distrito', value: form.distrito },
-      { label: 'Departamento', value: form.departamento },
-      { label: 'Municipio', value: form.municipio },
-    ]},
-    { title: 'Adicional', fields: [
-      { label: 'Curso', value: cursos.find(curso => curso.id === form.courseId)?.nombre ?? '' },
-      { label: 'Entidad', value: form.entidad },
-      { label: 'Función', value: form.funcion },
-      { label: 'Nivel educativo', value: form.nivelEducativo },
-      { label: 'Capacitación', value: form.capacitacion },
-    ]},
-  ]
+  /**
+   * Review groups are computed at render time so the cards the user sees in
+   * step 3 match the actual submission payload — `curso` / `capacitación`
+   * only appear for `Facilitador`, and `observaciones` never appears.
+   */
+  const reviewGroups = useMemo(() => {
+    const adicionalesFields: Array<{ label: string; value: string }> = []
+    if (form.funcion === 'Facilitador') {
+      adicionalesFields.push({ label: 'Curso', value: cursos.find(curso => curso.id === form.courseId)?.nombre ?? '' })
+      adicionalesFields.push({ label: 'Capacitación', value: form.capacitacion })
+    }
+    adicionalesFields.push({ label: 'Entidad', value: form.entidad })
+    adicionalesFields.push({ label: 'Función', value: form.funcion })
+    adicionalesFields.push({ label: 'Nivel educativo', value: form.nivelEducativo })
+    return [
+      { title: 'Datos Personales', fields: [
+        { label: 'Nombre', value: form.nombre },
+        { label: 'DUI', value: form.dui },
+        { label: 'Nacimiento', value: form.fechaNacimiento },
+        { label: 'Género', value: form.genero },
+        { label: 'País', value: form.pais },
+      ]},
+      { title: 'Contacto', fields: [
+        { label: 'Celular', value: `${form.prefijo} ${form.celular}` },
+        { label: 'Correo', value: form.correo },
+        { label: 'Dirección', value: form.direccion },
+        { label: 'Distrito', value: form.distrito },
+        { label: 'Departamento', value: form.departamento },
+        { label: 'Municipio', value: form.municipio },
+      ]},
+      { title: 'Adicional', fields: adicionalesFields },
+    ]
+  }, [form, cursos])
 
   if (submitted) {
     return (
@@ -214,15 +285,15 @@ export function RegistroPage() {
           {/* Sidebar */}
           <div className="lg:col-span-4">
             <div className="sticky top-24">
-              <span className="font-mono text-[11px] tracking-wider uppercase text-gold">Nuevo participante</span>
+              <span className="font-mono text-[11px] tracking-wider uppercase text-gold">Registro</span>
               <h1 className="mt-4 font-display text-4xl text-ivory leading-tight">
-                Registro de participantes
+                Registro de participantes y facilitadores
               </h1>
               <p className="mt-4 text-warm-gray text-sm leading-relaxed">
-                Este formulario es solo para el registro de <span className="text-ivory font-medium">participantes</span>. Facilitadores, facilitadoras y empleados son gestionados por el administrador desde el panel de control.
+                Elige tu rol para registrarte. Los <span className="text-ivory font-medium">participantes</span> se inscriben en actividades abiertas; los <span className="text-ivory font-medium">facilitadores</span> pueden proponer cursos y capacitaciones. Empleados y otros roles los gestiona el administrador.
               </p>
               <div className="mt-8 space-y-3">
-                {['Registro de participantes con código único', 'Validación previa antes de guardar', 'Base lista para reportes'].map((t, i) => (
+                {['Validación previa antes de guardar', 'Código único de seguimiento', 'Base lista para reportes'].map((t, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <Check className="w-4 h-4 text-gold flex-shrink-0" />
                     <span className="text-sm text-ivory/70">{t}</span>
@@ -253,19 +324,16 @@ export function RegistroPage() {
 
           {/* Form */}
           <div className="lg:col-span-8">
-            {/* Banner: visible on every step. Surfaces the participant-only
-                policy and points facilitators/employees to the admin panel. */}
             <div
               role="note"
-              aria-label="Información sobre el alcance del registro público"
-              data-testid="registro-participant-only-banner"
+              aria-label="Información sobre los roles disponibles en el registro público"
+              data-testid="registro-role-banner"
               className="mb-6 flex items-start gap-3 rounded-xl border border-gold/30 bg-gold/5 p-4 md:p-5"
             >
               <Info className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div className="text-sm text-ivory/85 leading-relaxed">
                 <p>
-                  Esta sección es solo para el registro de <span className="font-semibold text-ivory">participantes</span>.
-                  Facilitadores, facilitadoras y empleados son gestionados por el administrador desde el{' '}
+                  Elige <span className="font-semibold text-ivory">Participante</span> o <span className="font-semibold text-ivory">Facilitador</span>. Empleados y otros roles los gestiona el administrador desde el{' '}
                   <Link to="/login" className="text-gold underline underline-offset-2 hover:text-gold-light">
                     panel de control
                   </Link>
@@ -288,13 +356,31 @@ export function RegistroPage() {
                   <h3 className="font-display text-xl text-ivory">Datos Personales</h3>
                   <div className="grid md:grid-cols-2 gap-5">
                     <Field label="Nombre completo" value={form.nombre} onChange={v => updateField('nombre', v)} error={errors.nombre} />
-                    <Field label="Documento / DUI" value={form.dui} onChange={v => updateField('dui', v)} error={errors.dui} placeholder="00000000-0" />
+                    <Field
+                      label="Documento / DUI"
+                      value={form.dui}
+                      onChange={v => updateField('dui', v)}
+                      error={errors.dui}
+                      placeholder="00000000-0"
+                      pattern={"\\d{8}-\\d"}
+                      maxLength={10}
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
                   </div>
                   <Field label="Fecha de nacimiento" type="date" value={form.fechaNacimiento} onChange={v => updateField('fechaNacimiento', v)} error={errors.fechaNacimiento} />
                   <div className="grid md:grid-cols-2 gap-5">
                     <Select label="Género" value={form.genero} onChange={v => updateField('genero', v)} error={errors.genero} options={['Femenino', 'Masculino']} />
                     <Select label="País" value={form.pais} onChange={v => updateField('pais', v)} options={paisesCentroamerica} />
                   </div>
+                  <Select
+                    label="Rol en ACOES"
+                    value={form.funcion}
+                    onChange={v => updateField('funcion', v)}
+                    error={errors.funcion}
+                    options={[...PUBLIC_PARTICIPANT_ROLES]}
+                    required
+                  />
                 </div>
               )}
 
@@ -337,24 +423,45 @@ export function RegistroPage() {
 
                   <div className="space-y-5">
                     <h3 className="font-display text-xl text-ivory">Información adicional</h3>
-                    <div>
-                      <label htmlFor="courseId" className="text-[10px] text-warm-gray uppercase tracking-wider">Curso</label>
-                      <select id="courseId" name="courseId" aria-label="Curso" value={form.courseId} onChange={e => updateField('courseId', e.target.value)} className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 appearance-none transition-all ${errors.courseId ? 'border-error/50' : 'border-warm-tan/20'}`}>
-                        <option value="">Selecciona</option>
-                        {cursos.map(curso => <option key={curso.id} value={curso.id}>{curso.nombre}</option>)}
-                      </select>
-                      {errors.courseId && <p className="mt-1 text-xs text-error">{errors.courseId}</p>}
-                    </div>
+
+                    {/* Conditional course/training fields. Render only for Facilitador
+                        to satisfy `conditional-form-fields-by-funcion` spec. */}
+                    {form.funcion === 'Facilitador' && (
+                      <>
+                        <div>
+                          <label htmlFor="courseId" className="text-[10px] text-warm-gray uppercase tracking-wider">Curso</label>
+                          <select id="courseId" name="courseId" aria-label="Curso" value={form.courseId} onChange={e => updateField('courseId', e.target.value)} className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 appearance-none transition-all ${errors.courseId ? 'border-error/50' : 'border-warm-tan/20'}`}>
+                            <option value="">Selecciona</option>
+                            {cursos.map(curso => <option key={curso.id} value={curso.id}>{curso.nombre}</option>)}
+                          </select>
+                          {errors.courseId && <p className="mt-1 text-xs text-error">{errors.courseId}</p>}
+                        </div>
+                        <Field
+                          label="Capacitación"
+                          value={form.capacitacion}
+                          onChange={v => updateField('capacitacion', v)}
+                          error={errors.capacitacion}
+                          placeholder="Ej: taller o seguimiento"
+                          required
+                        />
+                      </>
+                    )}
+
                     <Field label="Entidad / organización" value={form.entidad} onChange={v => updateField('entidad', v)} error={errors.entidad} />
+
                     <div className="grid md:grid-cols-2 gap-5">
-                      <ReadOnlyField label="Rol en ACOES" value={PUBLIC_FORM_ROLE} helper="Este formulario es solo para el registro de participantes. Facilitadores y empleados se gestionan desde el panel de control." />
+                      <div>
+                        <span className="text-[10px] text-warm-gray uppercase tracking-wider">Rol en ACOES</span>
+                        <p
+                          data-testid="registro-role-summary"
+                          className="mt-1.5 w-full px-4 py-3 bg-charcoal/60 border border-warm-tan/15 rounded-xl text-sm text-ivory flex items-center"
+                        >
+                          <span className="font-medium">{form.funcion || 'Sin seleccionar'}</span>
+                        </p>
+                      </div>
                       <Select label="Nivel educativo" value={form.nivelEducativo} onChange={v => updateField('nivelEducativo', v)} options={nivelesEducativos} />
                     </div>
-                    <Field label="Capacitación" value={form.capacitacion} onChange={v => updateField('capacitacion', v)} placeholder="Ej: taller o seguimiento" />
-                    <div>
-                      <label htmlFor="observaciones" className="text-[10px] text-warm-gray uppercase tracking-wider">Observaciones</label>
-                      <textarea id="observaciones" name="observaciones" aria-label="Observaciones" value={form.observaciones} onChange={e => updateField('observaciones', e.target.value)} placeholder="Notas adicionales" className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray/50 focus:outline-none focus:border-gold/50 resize-none h-24" />
-                    </div>
+
                     <label className="flex items-start gap-3 cursor-pointer">
                       <input type="checkbox" name="autorizaDatos" aria-label="Autorizo el uso de mis datos para fines del registro ACOES" checked={form.autorizaDatos} onChange={e => updateField('autorizaDatos', e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-warm-tan/20 bg-charcoal text-gold focus:ring-gold/20" />
                       <span className="text-sm text-ivory/70">Autorizo el uso de mis datos para fines del registro ACOES</span>
@@ -383,54 +490,72 @@ export function RegistroPage() {
   )
 }
 
-function Field({ label, type = 'text', value, onChange, error, placeholder, disabled }: {
-  label: string; type?: string; value: string; onChange: (v: string) => void; error?: string; placeholder?: string; disabled?: boolean
+function Field({ label, type = 'text', value, onChange, error, placeholder, disabled, pattern, maxLength, inputMode, autoComplete, required }: {
+  label: string
+  type?: string
+  value: string
+  onChange: (v: string) => void
+  error?: string
+  placeholder?: string
+  disabled?: boolean
+  pattern?: string
+  maxLength?: number
+  inputMode?: 'numeric' | 'text' | 'tel' | 'email' | 'url' | 'search' | 'none' | 'decimal'
+  autoComplete?: string
+  required?: boolean
 }) {
   const id = label.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   return (
     <div>
       <label htmlFor={id} className="text-[10px] text-warm-gray uppercase tracking-wider">{label}</label>
-      <input id={id} name={id} aria-label={label} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
-        className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory placeholder:text-warm-gray/50 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all ${error ? 'border-error/50' : 'border-warm-tan/20'} ${disabled ? 'opacity-50' : ''}`} />
+      <input
+        id={id}
+        name={id}
+        aria-label={label}
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        pattern={pattern}
+        maxLength={maxLength}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        required={required}
+        className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory placeholder:text-warm-gray/50 focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 transition-all ${error ? 'border-error/50' : 'border-warm-tan/20'} ${disabled ? 'opacity-50' : ''}`}
+      />
       {error && <p className="mt-1 text-xs text-error">{error}</p>}
     </div>
   )
 }
 
-function Select({ label, value, onChange, error, options, disabled }: {
-  label: string; value: string; onChange: (v: string) => void; error?: string; options: string[]; disabled?: boolean
+function Select({ label, value, onChange, error, options, disabled, required }: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  error?: string
+  options: readonly string[]
+  disabled?: boolean
+  required?: boolean
 }) {
   const id = label.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
   return (
     <div>
       <label htmlFor={id} className="text-[10px] text-warm-gray uppercase tracking-wider">{label}</label>
-      <select id={id} name={id} aria-label={label} value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
-        className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 appearance-none transition-all ${error ? 'border-error/50' : 'border-warm-tan/20'} ${disabled ? 'opacity-50' : ''}`}>
+      <select
+        id={id}
+        name={id}
+        aria-label={label}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        required={required}
+        className={`mt-1.5 w-full px-4 py-3 bg-charcoal border rounded-xl text-sm text-ivory focus:outline-none focus:ring-2 focus:ring-gold/20 focus:border-gold/50 appearance-none transition-all ${error ? 'border-error/50' : 'border-warm-tan/20'} ${disabled ? 'opacity-50' : ''}`}
+      >
         <option value="">Selecciona</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
       {error && <p className="mt-1 text-xs text-error">{error}</p>}
-    </div>
-  )
-}
-
-function ReadOnlyField({ label, value, helper }: {
-  label: string; value: string; helper?: string
-}) {
-  const id = label.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-  return (
-    <div>
-      <label htmlFor={id} className="text-[10px] text-warm-gray uppercase tracking-wider">{label}</label>
-      <div
-        id={id}
-        data-testid="registro-role-readonly"
-        aria-readonly="true"
-        className="mt-1.5 w-full px-4 py-3 bg-charcoal/60 border border-warm-tan/15 rounded-xl text-sm text-ivory flex items-center justify-between gap-3"
-      >
-        <span className="font-medium">{value}</span>
-        <span className="text-[10px] uppercase tracking-wider text-gold/80 font-mono">Fijo</span>
-      </div>
-      {helper && <p className="mt-1.5 text-xs text-warm-gray leading-relaxed">{helper}</p>}
     </div>
   )
 }
