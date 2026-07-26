@@ -48,6 +48,44 @@ async function createTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- IMPORTANT: the courses table MUST be created BEFORE participants
+    -- and enrollments. The previous ordering (participants first) relied
+    -- on the table already existing on evolved databases; on a truly
+    -- fresh database the inline REFERENCES courses(id) would fail
+    -- because PostgreSQL resolves inline FKs at CREATE TABLE time.
+    -- Reordering here makes a fresh bootstrap succeed without manual
+    -- intervention.
+    CREATE TABLE IF NOT EXISTS courses (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      level TEXT NOT NULL,
+      facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      instructor TEXT NOT NULL,
+      instructor_bio TEXT,
+      price NUMERIC(10,2) NOT NULL DEFAULT 0,
+      price_original NUMERIC(10,2),
+      image TEXT,
+      fecha_inicio DATE NOT NULL,
+      fecha_fin DATE NOT NULL,
+      horario TEXT,
+      ubicacion TEXT,
+      departamento TEXT,
+      municipio TEXT,
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      cupo_maximo INTEGER NOT NULL DEFAULT 0,
+      inscritos INTEGER NOT NULL DEFAULT 0,
+      estado TEXT NOT NULL DEFAULT 'draft',
+      tags JSONB,
+      public_enrollment_token TEXT UNIQUE,
+      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS participants (
       id BIGSERIAL PRIMARY KEY,
       participant_code TEXT NOT NULL UNIQUE,
@@ -94,42 +132,15 @@ async function createTables() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    CREATE TABLE IF NOT EXISTS courses (
-      id BIGSERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT NOT NULL,
-      category TEXT NOT NULL,
-      level TEXT NOT NULL,
-      facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
-      instructor TEXT NOT NULL,
-      instructor_bio TEXT,
-      price NUMERIC(10,2) NOT NULL DEFAULT 0,
-      price_original NUMERIC(10,2),
-      image TEXT,
-      fecha_inicio DATE NOT NULL,
-      fecha_fin DATE NOT NULL,
-      horario TEXT,
-      ubicacion TEXT,
-      departamento TEXT,
-      municipio TEXT,
-      lat DOUBLE PRECISION,
-      lng DOUBLE PRECISION,
-      cupo_maximo INTEGER NOT NULL DEFAULT 0,
-      inscritos INTEGER NOT NULL DEFAULT 0,
-      estado TEXT NOT NULL DEFAULT 'draft',
-      tags JSONB,
-      public_enrollment_token TEXT UNIQUE,
-      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
-      updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-
     CREATE TABLE IF NOT EXISTS enrollments (
       id BIGSERIAL PRIMARY KEY,
       course_id BIGINT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
       facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
-      participant_id BIGINT REFERENCES participants(id) ON DELETE SET NULL,
+      -- participant_id is NOT NULL with CASCADE so the participant is the
+      -- durable record of "this participant is enrolled in this course".
+      -- Legacy identity columns are still populated for admin views during
+      -- the transition. See the enrollments-participant-fk spec.
+      participant_id BIGINT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
       enrolled_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
       full_name TEXT NOT NULL,
       email TEXT NOT NULL,
@@ -223,6 +234,43 @@ async function createTables() {
     ALTER TABLE enrollments ADD CONSTRAINT enrollments_estado_check CHECK (estado IN ('pending', 'confirmed', 'duplicate_review', 'cancelled', 'withdrawn'));
 
     ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS facilitator_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+
+    -- Idempotent migration to enrollments.participant_id:
+    --   1. Ensure the column exists (it already does on evolved DBs).
+    --   2. Backfill any NULL participant_id by resolving a participant
+    --      from the legacy dui column.
+    --   3. Fail loudly if any NULLs remain — better to surface the
+    --      orphan than to silently drop the constraint.
+    --   4. Promote the column to NOT NULL.
+    --   5. Drop and re-add the FK constraint with CASCADE so the FK
+    --      semantics are guaranteed even on a previously-evolved DB
+    --      that had the old SET NULL behavior.
+    --   6. Create the index used by admin joins.
+    ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS participant_id BIGINT;
+
+    UPDATE enrollments e
+       SET participant_id = p.id
+      FROM participants p
+     WHERE e.participant_id IS NULL
+       AND e.dui IS NOT NULL
+       AND p.document_number = e.dui
+       AND p.deleted_at IS NULL;
+
+    DO $acoes_fk_migration$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM enrollments WHERE participant_id IS NULL) THEN
+        RAISE EXCEPTION 'Cannot enforce enrollments.participant_id NOT NULL: % orphan rows; resolve them manually first',
+          (SELECT COUNT(*)::text FROM enrollments WHERE participant_id IS NULL);
+      END IF;
+    END $acoes_fk_migration$;
+
+    ALTER TABLE enrollments ALTER COLUMN participant_id SET NOT NULL;
+
+    ALTER TABLE enrollments DROP CONSTRAINT IF EXISTS enrollments_participant_id_fkey;
+    ALTER TABLE enrollments ADD CONSTRAINT enrollments_participant_id_fkey
+      FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE;
+
+    CREATE INDEX IF NOT EXISTS idx_enrollments_participant_id ON enrollments(participant_id);
 
     CREATE UNIQUE INDEX IF NOT EXISTS enrollments_active_course_participant_idx
       ON enrollments (course_id, participant_id)
