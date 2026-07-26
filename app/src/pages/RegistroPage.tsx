@@ -1,9 +1,17 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, ChevronRight, ChevronLeft, CheckCircle2, User, Phone, BookOpen } from 'lucide-react'
+import { Check, ChevronRight, ChevronLeft, CheckCircle2, Info, User, Phone, BookOpen } from 'lucide-react'
 import { createRegistro, getCursos, ValidationApiError } from '@/services/api'
-import { departamentosElSalvador, municipiosPorDepartamento, funcionesACOES, nivelesEducativos, paisesCentroamerica } from '@/data/mockData'
+import { departamentosElSalvador, municipiosPorDepartamento, nivelesEducativos, paisesCentroamerica } from '@/data/mockData'
 import type { Registro } from '@/types'
+
+/**
+ * The public registration form is for PARTICIPANTS only. The `funcion`
+ * field is hardcoded to "Participante" and never surfaced to the user
+ * as a choice — facilitators and employees are managed by the admin
+ * via the dashboard (`/dashboard/registros`).
+ */
+const PUBLIC_FORM_ROLE = 'Participante' as const
 
 /**
  * Maps the shared Zod schema's camelCase field names (returned in the
@@ -44,7 +52,7 @@ const initialForm: Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado'> 
   courseId: '',
   nombre: '', dui: '', fechaNacimiento: '', genero: '', pais: 'El Salvador',
   prefijo: '+503', celular: '', correo: '', direccion: '', distrito: '',
-  departamento: '', municipio: '', entidad: '', funcion: '',
+  departamento: '', municipio: '', entidad: '', funcion: PUBLIC_FORM_ROLE,
   nivelEducativo: '', capacitacion: '', autorizaDatos: false, observaciones: '',
 }
 
@@ -88,7 +96,7 @@ export function RegistroPage() {
     if (step === 3) {
       if (!form.courseId) newErrors.courseId = 'Selecciona'
       if (!form.entidad.trim()) newErrors.entidad = 'Requerido'
-      if (!form.funcion) newErrors.funcion = 'Selecciona'
+      // `funcion` is always PUBLIC_FORM_ROLE; never validated as user input.
       if (!form.autorizaDatos) newErrors.autorizaDatos = 'Debes autorizar'
     }
     setErrors(newErrors)
@@ -208,13 +216,13 @@ export function RegistroPage() {
             <div className="sticky top-24">
               <span className="font-mono text-[11px] tracking-wider uppercase text-gold">Nuevo participante</span>
               <h1 className="mt-4 font-display text-4xl text-ivory leading-tight">
-                Registro al directorio ACOES
+                Registro de participantes
               </h1>
               <p className="mt-4 text-warm-gray text-sm leading-relaxed">
-                Completa el formulario para validar tu información antes de guardarla.
+                Este formulario es solo para el registro de <span className="text-ivory font-medium">participantes</span>. Facilitadores, facilitadoras y empleados son gestionados por el administrador desde el panel de control.
               </p>
               <div className="mt-8 space-y-3">
-                {['Registro centralizado con código único', 'Validación previa antes de guardar', 'Base lista para reportes'].map((t, i) => (
+                {['Registro de participantes con código único', 'Validación previa antes de guardar', 'Base lista para reportes'].map((t, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <Check className="w-4 h-4 text-gold flex-shrink-0" />
                     <span className="text-sm text-ivory/70">{t}</span>
@@ -245,6 +253,27 @@ export function RegistroPage() {
 
           {/* Form */}
           <div className="lg:col-span-8">
+            {/* Banner: visible on every step. Surfaces the participant-only
+                policy and points facilitators/employees to the admin panel. */}
+            <div
+              role="note"
+              aria-label="Información sobre el alcance del registro público"
+              data-testid="registro-participant-only-banner"
+              className="mb-6 flex items-start gap-3 rounded-xl border border-gold/30 bg-gold/5 p-4 md:p-5"
+            >
+              <Info className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="text-sm text-ivory/85 leading-relaxed">
+                <p>
+                  Esta sección es solo para el registro de <span className="font-semibold text-ivory">participantes</span>.
+                  Facilitadores, facilitadoras y empleados son gestionados por el administrador desde el{' '}
+                  <Link to="/login" className="text-gold underline underline-offset-2 hover:text-gold-light">
+                    panel de control
+                  </Link>
+                  .
+                </p>
+              </div>
+            </div>
+
             <form className="bg-charcoal-light rounded-2xl border border-warm-tan/10 p-6 md:p-10" onSubmit={handleFormSubmit}>
               {step === 3 && (
                 <div className="mb-8">
@@ -318,7 +347,7 @@ export function RegistroPage() {
                     </div>
                     <Field label="Entidad / organización" value={form.entidad} onChange={v => updateField('entidad', v)} error={errors.entidad} />
                     <div className="grid md:grid-cols-2 gap-5">
-                      <Select label="Función en ACOES" value={form.funcion} onChange={v => updateField('funcion', v)} error={errors.funcion} options={funcionesACOES} />
+                      <ReadOnlyField label="Rol en ACOES" value={PUBLIC_FORM_ROLE} helper="Este formulario es solo para el registro de participantes. Facilitadores y empleados se gestionan desde el panel de control." />
                       <Select label="Nivel educativo" value={form.nivelEducativo} onChange={v => updateField('nivelEducativo', v)} options={nivelesEducativos} />
                     </div>
                     <Field label="Capacitación" value={form.capacitacion} onChange={v => updateField('capacitacion', v)} placeholder="Ej: taller o seguimiento" />
@@ -381,6 +410,27 @@ function Select({ label, value, onChange, error, options, disabled }: {
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
       {error && <p className="mt-1 text-xs text-error">{error}</p>}
+    </div>
+  )
+}
+
+function ReadOnlyField({ label, value, helper }: {
+  label: string; value: string; helper?: string
+}) {
+  const id = label.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return (
+    <div>
+      <label htmlFor={id} className="text-[10px] text-warm-gray uppercase tracking-wider">{label}</label>
+      <div
+        id={id}
+        data-testid="registro-role-readonly"
+        aria-readonly="true"
+        className="mt-1.5 w-full px-4 py-3 bg-charcoal/60 border border-warm-tan/15 rounded-xl text-sm text-ivory flex items-center justify-between gap-3"
+      >
+        <span className="font-medium">{value}</span>
+        <span className="text-[10px] uppercase tracking-wider text-gold/80 font-mono">Fijo</span>
+      </div>
+      {helper && <p className="mt-1.5 text-xs text-warm-gray leading-relaxed">{helper}</p>}
     </div>
   )
 }

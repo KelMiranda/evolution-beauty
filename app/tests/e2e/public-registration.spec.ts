@@ -5,7 +5,10 @@ test.describe('Public registration flow', () => {
     const uniqueDui = `7${Date.now()}-${Math.floor(Math.random() * 9)}`.slice(0, 9) + '-' + Math.floor(Math.random() * 10)
     await page.goto('/#/registro')
 
-    await expect(page.getByRole('heading', { name: /registro al directorio acoes/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /registro de participantes/i })).toBeVisible()
+
+    // The participant-only banner is shown on every step.
+    await expect(page.getByTestId('registro-participant-only-banner')).toBeVisible()
 
     const stepOneTextboxes = page.getByRole('textbox')
     const stepOneComboboxes = page.getByRole('combobox')
@@ -32,10 +35,11 @@ test.describe('Public registration flow', () => {
     await expect(page.getByRole('heading', { name: /información adicional/i })).toBeVisible()
 
     const stepThreeTextboxes = page.getByRole('textbox')
-    const stepThreeComboboxes = page.getByRole('combobox')
     await page.getByLabel('Curso').selectOption({ label: 'Colorimetría Profesional' })
     await stepThreeTextboxes.nth(0).fill('Test Org')
-    await stepThreeComboboxes.nth(1).selectOption({ index: 1 })
+    // The `funcion` field is now read-only and hardcoded to "Participante";
+    // there is no longer a <select> for it.
+    await expect(page.getByTestId('registro-role-readonly')).toContainText('Participante')
     await stepThreeTextboxes.nth(1).fill('Prueba E2E')
     await page.locator('input[name="autorizaDatos"]').check()
 
@@ -60,7 +64,7 @@ test.describe('Public registration flow', () => {
         department: 'San Salvador',
         district: 'San Salvador',
         organization: 'Test Org',
-        role_function: 'Empleado',
+        role_function: 'Participante',
         education_level: '',
         program: 'Prueba E2E',
         status: 'Pendiente',
