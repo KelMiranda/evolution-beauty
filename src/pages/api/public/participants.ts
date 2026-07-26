@@ -3,8 +3,9 @@ import type { APIRoute } from 'astro';
 import { ensureDatabase } from '../../../lib/server/bootstrap';
 import { pickBoolean, pickNumber, pickOptionalString, pickString } from '../../../lib/server/http-picks';
 import { createNotification, notificationKinds } from '../../../lib/server/notifications';
-import { participantPublicSchema, validateParticipantSubmission } from '../../../lib/server/participant-schema';
+import { validateParticipantSubmission } from '../../../lib/server/participant-schema';
 import { createParticipant, findParticipantDuplicates } from '../../../lib/server/participants';
+import { publicParticipantSubmissionSchema } from '../../../lib/server/public-participant-schema';
 
 export const POST: APIRoute = async ({ request }) => {
   await ensureDatabase();
@@ -61,7 +62,7 @@ export const POST: APIRoute = async ({ request }) => {
       notes: pickOptionalString(raw, 'notes', 'notes'),
       consent: pickBoolean(raw, 'consent', 'consent'),
     };
-    const parsed = participantPublicSchema.safeParse(normalized);
+    const parsed = publicParticipantSubmissionSchema.safeParse(normalized);
     if (!parsed.success) {
       return Response.json(
         { error: 'validation_failed', issues: parsed.error.issues },
@@ -119,7 +120,10 @@ export const POST: APIRoute = async ({ request }) => {
       educationLevel: parsedParticipant.educationLevel,
       program: parsedParticipant.program,
       status: 'Pendiente',
-      notes: parsedParticipant.notes,
+      // Public submissions MUST NOT persist notes; the public schema
+      // discards any incoming value to undefined. Pass undefined here
+      // explicitly so the create input is unambiguous.
+      notes: undefined,
       consent: parsedParticipant.consent,
     },
     null,

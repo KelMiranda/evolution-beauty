@@ -2,6 +2,7 @@ import { query, withTransaction } from './db';
 import { recordAuditEvent } from './audit';
 import { createNotification, notificationKinds } from './notifications';
 import { getCourseById } from './courses';
+import { normalizeDui } from './dui';
 
 export type Participant = {
   id: number;
@@ -476,6 +477,44 @@ export async function setParticipantLifecycle(id: number, lifecycleState: 'activ
 
 export async function getParticipantById(id: number) {
   const result = await query<Participant>('SELECT * FROM participants WHERE id = $1 LIMIT 1', [id]);
+  return result.rows[0] ?? null;
+}
+
+export type GetParticipantByDocumentNumberOptions = {
+  /** Include soft-deleted participants (default: false, matches `listParticipants`). */
+  includeDeleted?: boolean;
+  /** Reuse an open transaction client instead of the global pool. */
+  tx?: TransactionClient;
+};
+
+/**
+ * Look up a participant by their normalized document number (DUI).
+ *
+ * The input is normalized via `normalizeDui` so callers do not need to
+ * pre-format it; `000000000` and `00000 000-0` both match a row stored
+ * as `00000000-0`. Soft-deleted participants are excluded by default to
+ * match `listParticipants` policy.
+ *
+ * Returns `null` for any input that does not normalize to the canonical
+ * format, or when no row matches.
+ */
+export async function getParticipantByDocumentNumber(
+  documentNumber: string,
+  options: GetParticipantByDocumentNumberOptions = {},
+): Promise<Participant | null> {
+  const canonical = normalizeDui(documentNumber);
+  if (!canonical) return null;
+
+  const whereDeleted = options.includeDeleted ? '' : 'AND deleted_at IS NULL';
+  const sql = `SELECT * FROM participants WHERE document_number = $1 ${whereDeleted} LIMIT 1`;
+  const params = [canonical];
+
+  if (options.tx) {
+    const result = await options.tx.query<Participant>(sql, params);
+    return result.rows[0] ?? null;
+  }
+
+  const result = await query<Participant>(sql, params);
   return result.rows[0] ?? null;
 }
 

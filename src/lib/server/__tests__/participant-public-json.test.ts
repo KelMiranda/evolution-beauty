@@ -40,7 +40,7 @@ const baseValidPayload = {
   department: 'San Salvador',
   district: 'San Salvador',
   organization: 'Test Org',
-  roleFunction: 'Empleado',
+  roleFunction: 'Participante',
   educationLevel: '',
   program: 'Prueba E2E',
   status: 'Pendiente',
@@ -133,7 +133,7 @@ describe('POST /api/public/participants (JSON branch)', () => {
       department: 'San Salvador',
       district: 'San Salvador',
       organization: 'Test Org',
-      role_function: 'Empleado',
+      role_function: 'Participante',
       education_level: '',
       program: 'Prueba E2E',
       status: 'Pendiente',
@@ -151,5 +151,75 @@ describe('POST /api/public/participants (JSON branch)', () => {
     } as Parameters<typeof POST>[0]);
     expect(response.status).not.toBe(500);
     expect(response.status).toBe(400);
+  });
+
+  it('rejects roleFunction: Empleado on the public path with a per-field issue on roleFunction', async () => {
+    const response = await POST({
+      request: makeRequest({ ...baseValidPayload, roleFunction: 'Empleado' }),
+    } as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(400);
+
+    const body = (await response.json()) as { error: string; issues: Array<{ path: (string | number)[]; message: string }> };
+    expect(body.error).toBe('validation_failed');
+    const roleIssue = body.issues.find((issue) => issue.path[0] === 'roleFunction');
+    expect(roleIssue).toBeDefined();
+    expect(createParticipantMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects roleFunction: Otro on the public path with a per-field issue on roleFunction', async () => {
+    const response = await POST({
+      request: makeRequest({ ...baseValidPayload, roleFunction: 'Otro' }),
+    } as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(400);
+    expect(createParticipantMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts roleFunction: Participante and returns 201', async () => {
+    createParticipantMock.mockResolvedValue({ id: 99, participant_code: 'ACOES-2026-0099' });
+
+    const response = await POST({
+      request: makeRequest({ ...baseValidPayload, roleFunction: 'Participante' }),
+    } as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(201);
+    expect(createParticipantMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes a nine-digit DUI to the canonical form before persistence', async () => {
+    createParticipantMock.mockResolvedValue({ id: 100, participant_code: 'ACOES-2026-0100' });
+
+    const response = await POST({
+      request: makeRequest({ ...baseValidPayload, roleFunction: 'Participante', documentNumber: '123456789' }),
+    } as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(201);
+
+    const createArgs = createParticipantMock.mock.calls[0]?.[0] as { documentNumber: string };
+    expect(createArgs.documentNumber).toBe('12345678-9');
+  });
+
+  it('rejects a malformed DUI with a per-field error on documentNumber', async () => {
+    const response = await POST({
+      request: makeRequest({ ...baseValidPayload, roleFunction: 'Participante', documentNumber: '1234' }),
+    } as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(400);
+    expect(createParticipantMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-empty notes value on the public path', async () => {
+    const response = await POST({
+      request: makeRequest({ ...baseValidPayload, roleFunction: 'Participante', notes: 'something' }),
+    } as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(400);
+    expect(createParticipantMock).not.toHaveBeenCalled();
+  });
+
+  it('never forwards a notes field to createParticipant, even when notes is empty', async () => {
+    createParticipantMock.mockResolvedValue({ id: 101, participant_code: 'ACOES-2026-0101' });
+
+    await POST({
+      request: makeRequest({ ...baseValidPayload, roleFunction: 'Participante', notes: '' }),
+    } as Parameters<typeof POST>[0]);
+
+    const createArgs = createParticipantMock.mock.calls[0]?.[0] as { notes: unknown };
+    expect(createArgs.notes).toBeUndefined();
   });
 });
