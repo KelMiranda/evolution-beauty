@@ -4,6 +4,8 @@ import { ensureDatabase } from '../../../lib/server/bootstrap';
 import { getCourseByPublicEnrollmentToken } from '../../../lib/server/courses';
 import { createEnrollment } from '../../../lib/server/enrollments';
 import { enrollmentSubmissionSchema } from '../../../lib/server/course-schema';
+import { duiSchema } from '../../../lib/server/dui';
+import { getParticipantByDocumentNumber } from '../../../lib/server/participants';
 
 export const POST: APIRoute = async ({ request }) => {
   await ensureDatabase();
@@ -18,7 +20,8 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
-  const token = typeof body === 'object' && body !== null ? String((body as { token?: unknown }).token ?? '') : '';
+  const rawBody = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+  const token = String(rawBody.token ?? '');
   const course = await getCourseByPublicEnrollmentToken(token);
 
   if (!course) {
@@ -28,13 +31,34 @@ export const POST: APIRoute = async ({ request }) => {
     });
   }
 
+  // Validate the DUI in the body via the canonical schema so the
+  // participant lookup and persistence always use a normalized form.
+  // PR1 returns 404 when the participant is not found; the full
+  // 200-with-redirect flow to /registro is PR3.
+  const duiParse = duiSchema.safeParse(rawBody.dui);
+  if (!duiParse.success) {
+    return new Response(JSON.stringify({ error: 'Datos inválidos', details: duiParse.error.flatten() }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const participant = await getParticipantByDocumentNumber(duiParse.data);
+  if (!participant) {
+    return new Response(JSON.stringify({ error: 'No encontramos un participante con ese DUI. Regístrate primero.' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const parsed = enrollmentSubmissionSchema.safeParse({
     courseId: course.id,
-    fullName: typeof body === 'object' && body !== null ? (body as Record<string, unknown>).fullName : undefined,
-    email: typeof body === 'object' && body !== null ? (body as Record<string, unknown>).email : undefined,
-    phone: typeof body === 'object' && body !== null ? (body as Record<string, unknown>).phone : undefined,
-    dui: typeof body === 'object' && body !== null ? (body as Record<string, unknown>).dui : undefined,
-    notas: typeof body === 'object' && body !== null ? (body as Record<string, unknown>).notas : undefined,
+    participantId: participant.id,
+    fullName: rawBody.fullName,
+    email: rawBody.email,
+    phone: rawBody.phone,
+    dui: duiParse.data,
+    notas: rawBody.notas,
   });
 
   if (!parsed.success) {
@@ -48,6 +72,7 @@ export const POST: APIRoute = async ({ request }) => {
     const enrollment = await createEnrollment({
       courseId: course.id,
       publicToken: token,
+      participantId: participant.id,
       fullName: parsed.data.fullName,
       email: parsed.data.email,
       phone: parsed.data.phone,

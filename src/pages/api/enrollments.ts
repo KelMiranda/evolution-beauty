@@ -5,6 +5,8 @@ import { ensureDatabase } from '../../lib/server/bootstrap';
 import { canViewEnrollments } from '../../lib/server/permissions';
 import { createEnrollment, listEnrollments } from '../../lib/server/enrollments';
 import { enrollmentSubmissionSchema } from '../../lib/server/course-schema';
+import { normalizeDui } from '../../lib/server/dui';
+import { getParticipantByDocumentNumber } from '../../lib/server/participants';
 
 export const GET: APIRoute = async ({ url, cookies }) => {
   await ensureDatabase();
@@ -84,10 +86,34 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     });
   }
 
+  // Admin compatibility shim: when participantId is missing, look up the
+  // participant by DUI. If neither is provided, or the DUI does not
+  // resolve, return a clear 400 so the admin knows to create the
+  // participant first. This is the minimum behavior change to keep the
+  // admin path working under the new NOT NULL participant FK.
+  let resolvedParticipantId = parsed.data.participantId;
+  if (resolvedParticipantId === undefined) {
+    const dui = normalizeDui(parsed.data.dui ?? '');
+    if (!dui) {
+      return new Response(
+        JSON.stringify({ error: 'La inscripción administrativa requiere participantId o un DUI que corresponda a un participante existente' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    const participant = await getParticipantByDocumentNumber(dui);
+    if (!participant) {
+      return new Response(
+        JSON.stringify({ error: 'No existe un participante con ese DUI. Crealo primero desde el panel administrativo.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    resolvedParticipantId = participant.id;
+  }
+
   try {
     const enrollment = await createEnrollment({
       courseId: parsed.data.courseId,
-      participantId: parsed.data.participantId,
+      participantId: resolvedParticipantId,
       enrolledBy: user.id,
       fullName: parsed.data.fullName,
       email: parsed.data.email,

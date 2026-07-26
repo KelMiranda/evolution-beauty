@@ -97,11 +97,51 @@ export async function createEnrollment(input: EnrollmentInput) {
       throw new Error('El curso no está disponible para inscripción');
     }
 
+    // If a participantId is provided, look up the participant inside the
+    // same transaction and use their current identity to populate the
+    // legacy identity columns. This is the public-path flow: the legacy
+    // columns stay accurate for admin views even if the participant's
+    // contact info changes later.
+    //
+    // For the admin path (no participantId), the caller's input is used
+    // directly to preserve existing behavior.
+    let resolvedParticipantId: number | null = input.participantId ?? null;
+    let legacyFullName = input.fullName;
+    let legacyEmail = input.email;
+    let legacyPhone = input.phone;
+    let legacyDui: string | null = input.dui ?? null;
+
+    if (resolvedParticipantId !== null) {
+      const participantResult = await tx.query<{
+        id: string;
+        full_name: string;
+        email: string | null;
+        phone: string;
+        document_number: string;
+      }>(
+        `SELECT id, full_name, email, phone, document_number
+         FROM participants
+         WHERE id = $1 AND deleted_at IS NULL
+         LIMIT 1`,
+        [resolvedParticipantId],
+      );
+
+      const participant = participantResult.rows[0];
+      if (!participant) {
+        throw new Error('Participante no encontrado');
+      }
+
+      legacyFullName = participant.full_name;
+      legacyEmail = participant.email ?? '';
+      legacyPhone = participant.phone;
+      legacyDui = participant.document_number;
+    }
+
     const existing = await tx.query<{ id: number }>(
       `SELECT id FROM enrollments
        WHERE course_id = $1 AND participant_id IS NOT NULL AND participant_id = $2 AND estado NOT IN ('cancelled', 'withdrawn')
        LIMIT 1`,
-      [input.courseId, input.participantId ?? null],
+      [input.courseId, resolvedParticipantId],
     );
 
     if (existing.rows.length > 0) {
@@ -123,12 +163,12 @@ export async function createEnrollment(input: EnrollmentInput) {
       [
         input.courseId,
         facilitatorId,
-        input.participantId ?? null,
+        resolvedParticipantId,
         input.enrolledBy ?? null,
-        input.fullName,
-        input.email,
-        input.phone,
-        input.dui ?? null,
+        legacyFullName,
+        legacyEmail,
+        legacyPhone,
+        legacyDui,
         input.notas ?? null,
       ],
     );
@@ -154,7 +194,7 @@ export async function createEnrollment(input: EnrollmentInput) {
       audienceRole: 'admin',
       kind: notificationKinds.participantEnrolled,
       title: 'Participante inscrito',
-      body: `${input.fullName} fue inscrito en el curso ${input.courseId}.`,
+      body: `${legacyFullName} fue inscrito en el curso ${input.courseId}.`,
       payload: { courseId: input.courseId, enrollmentId: enrollment.id },
     });
 
