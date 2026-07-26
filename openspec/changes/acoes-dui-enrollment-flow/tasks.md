@@ -163,8 +163,8 @@ Revert the service and admin shim commit; leave the FK migration in place and bl
 3. Preserve personal/contact fields across role changes and update the review/banner copy without exposing admin-only roles.
 
 ### Verification
-- [ ] Run `npm run build` from `app/`.
-- [ ] Manually or via the unit suite verify empty role hides both fields, facilitator requires both, participant does not, and toggling clears stale values.
+- [x] Run `npm run build` from `app/`.
+- [x] Manually or via the unit suite verify empty role hides both fields, facilitator requires both, participant does not, and toggling clears stale values.
 
 ### Rollback
 Revert the `RegistroPage.tsx` commit; no backend or redirect helper changes are required to restore the prior UI.
@@ -187,8 +187,8 @@ Revert the `RegistroPage.tsx` commit; no backend or redirect helper changes are 
 3. Add table-driven unit cases matching the redirect spec scenarios.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:unit -- tests/unit/safeRedirect.test.ts)`.
-- [ ] Confirm `/cursos/9?token=XYZ` and `/cursos/9#schedule` are returned unchanged while `//evil.com` and `javascript:...` return `null`.
+- [x] Run `(cd app && npm run test:unit -- tests/unit/safeRedirect.test.ts)`.
+- [x] Confirm `/cursos/9?token=XYZ` and `/cursos/9#schedule` are returned unchanged while `//evil.com` and `javascript:...` return `null`.
 
 ### Rollback
 Revert the helper and its unit test; registration falls back to its success page until redirect handling is reapplied.
@@ -211,8 +211,8 @@ Revert the helper and its unit test; registration falls back to its success page
 3. Preserve the registration-code success page when the parameter is missing or invalid.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:unit -- tests/unit/registro-form.test.tsx)` after the form suite exists.
-- [ ] Run `npm run build` from `app/` and verify valid encoded course redirects and malicious redirects remain on the success page.
+- [x] Run `(cd app && npm run test:unit -- tests/unit/registro-redirect.test.tsx)` after the form suite exists.
+- [x] Run `npm run build` from `app/` and verify valid encoded course redirects and malicious redirects remain on the success page.
 
 ### Rollback
 Revert the redirect/client-DUI wiring while retaining the role form; the form returns to its terminal success behavior.
@@ -236,8 +236,8 @@ Revert the redirect/client-DUI wiring while retaining the role form; the form re
 3. Keep admin role behavior out of the public UI suite; it is covered by backend and PR4 compatibility tests.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:unit -- tests/unit/registro-form.test.tsx)`.
-- [ ] Run `(cd app && npm run test:e2e -- tests/e2e/public-registration-funcion.spec.ts)` against the seeded PostgreSQL stack.
+- [x] Run `(cd app && npm run test:unit -- tests/unit/registro-conditional-fields.test.tsx tests/unit/registro-redirect.test.tsx)`.
+- [ ] Run `(cd app && npm run test:e2e -- tests/e2e/public-registration-funcion.spec.ts)` against the seeded PostgreSQL stack. (PR4)
 
 ### Rollback
 Revert the replacement tests and deletion; production behavior from tasks 2.1–2.3 remains independently reversible.
