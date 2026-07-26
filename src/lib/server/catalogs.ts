@@ -4,6 +4,12 @@ export const participantGenderOptions = ['Femenino', 'Masculino'] as const;
 
 export const participantRoleFunctionOptions = ['Empleado', 'Facilitador', 'Participante', 'Otro'] as const;
 
+// Public registration exposes only Participante and Facilitador; the admin
+// four-value catalog above remains untouched so admin paths can still
+// persist Empleado, Otro, and historical Facilitadora. See the
+// `public-registration-enum-funcion` spec.
+export const PUBLIC_PARTICIPANT_ROLE_OPTIONS = ['Participante', 'Facilitador'] as const;
+
 export const participantEducationLevelOptions = [
   'Sin escolaridad',
   'Primaria',

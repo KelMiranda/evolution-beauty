@@ -56,7 +56,9 @@ const participantExtendedShape = {
   coursesCount: z.coerce.number().int().min(0).default(0),
 };
 
-const participantPublicObjectSchema = z.object(participantBaseShape).superRefine((data, ctx) => {
+const participantBaseObjectSchema = z.object(participantBaseShape);
+
+const participantPublicObjectSchema = participantBaseObjectSchema.superRefine((data, ctx) => {
   if (!participantCountryOptions.some((country) => country.name === data.phoneCountry)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phoneCountry'], message: 'Selecciona un país válido' });
   }
@@ -73,6 +75,13 @@ const participantPublicObjectSchema = z.object(participantBaseShape).superRefine
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['municipality'], message: 'El municipio no corresponde al departamento seleccionado' });
   }
 });
+
+/**
+ * The base participant object (without the public superRefine). Exported
+ * so the dedicated public schema can `.omit().extend()` on it before
+ * re-applying its own superRefine for the public role matrix.
+ */
+export { participantBaseObjectSchema };
 
 export const participantPublicSchema = participantPublicObjectSchema;
 
