@@ -103,6 +103,49 @@ link — e.g. `http://localhost:4321/cursos/9?token=...` (backend
 origin, no `#`) — the Astro middleware catches it and redirects to
 `http://localhost:3000/#/cursos/9?token=...` (SPA origin with `#`).
 
+### Public form is for participants only
+
+The SPA exposes two distinct public-facing surfaces that both end up
+creating a participant record via `POST /api/public/participants`:
+
+- `app/src/pages/RegistroPage.tsx` — the standalone directory
+  registration form, reachable at `/#/registro`.
+- `app/src/pages/CursoDetallePage.tsx` — the "Inscribirme" modal on
+  a course detail page, reached either directly or via the public
+  enrollment link above.
+
+Both flows are restricted to the `Participante` audience. In
+particular:
+
+- `RegistroPage` no longer exposes a `<select>` for `funcion`. The
+  form hardcodes `funcion: 'Participante'` in its state and always
+  submits that value, regardless of what the user does in the form.
+  A visible banner on every step states that facilitators/facilitators
+  and employees are managed by the admin via the dashboard.
+- `CursoDetallePage` does not have a `funcion` field at all.
+- The `participantPublicSchema` (`src/lib/server/participant-schema.ts`)
+  remains permissive on `role_function` because the admin API can
+  legitimately create records with any role. The frontend is the
+  enforcement point: a public caller cannot pick a non-participant
+  role through the UI.
+- The admin can edit `funcion` on an existing record after the fact
+  via `/dashboard/registros` if the user later becomes a facilitator
+  or employee.
+
+## Roles and audiences
+
+| Role          | How they enter the system                                          |
+|---------------|--------------------------------------------------------------------|
+| Participant   | Via the public registration form (`/#/registro`) or the public enrollment link on a course detail page. |
+| Facilitator / Facilitadora | Created and managed by the admin via `/dashboard/registros`. The public form does not offer this role. |
+| Empleado      | Created and managed by the admin via `/dashboard/registros`. The public form does not offer this role. |
+| Admin         | Has full read/write access to all records and dashboards. |
+
+The `Role` type (`app/src/types/index.ts`) and the auth layer treat
+these four as distinct values; the data model (`funcion` column on
+the participant record) is intentionally flexible so that the admin
+can reassign a participant's role later.
+
 ## Token handling
 
 `generateCourseEnrollmentToken(courseId, instructor)` returns a
