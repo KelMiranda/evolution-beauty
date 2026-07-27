@@ -13,11 +13,11 @@ COPY package*.json ./
 RUN npm ci
 
 FROM base AS build
-ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN npm exec astro check
 COPY --from=spa-build /spa/dist ./public
-RUN npm run build
+RUN npm exec astro build
 
 FROM base AS runtime
 ENV NODE_ENV=production
