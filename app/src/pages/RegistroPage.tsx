@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
-import { Check, ChevronRight, ChevronLeft, CheckCircle2, Info, User, Phone, BookOpen } from 'lucide-react'
+import { Check, ChevronRight, ChevronLeft, CheckCircle2, AlertCircle, Info, User, Phone, BookOpen } from 'lucide-react'
 import { createRegistro, getCursos, ValidationApiError } from '@/services/api'
 import { safeRedirect } from '@/lib/safeRedirect'
 import { normalizeDui, formatDuiInput } from '@/lib/dui'
@@ -53,6 +53,43 @@ const steps = [
   { num: 2, title: 'Contacto', icon: Phone },
   { num: 3, title: 'Confirmar', icon: BookOpen },
 ]
+
+/**
+ * Maps a form field name (as it appears in `errors` after submit) to the
+ * step number that contains it. Used to jump to the correct step on
+ * validation failure so the user can actually see the field that's
+ * failing (the previous implementation always jumped to step 1, which
+ * hid errors for fields like `courseId` and `capacitacion` that live on
+ * step 3).
+ */
+const stepForField = (field: string): number | null => {
+  if (['nombre', 'dui', 'fechaNacimiento', 'genero', 'pais', 'funcion'].includes(field)) return 1
+  if (['prefijo', 'celular', 'correo', 'direccion', 'distrito', 'departamento', 'municipio'].includes(field)) return 2
+  if (['courseId', 'entidad', 'capacitacion', 'nivelEducativo', 'observaciones', 'autorizaDatos'].includes(field)) return 3
+  return null
+}
+
+const fieldLabels: Record<string, string> = {
+  nombre: 'Nombre',
+  dui: 'DUI',
+  fechaNacimiento: 'Fecha de nacimiento',
+  genero: 'Género',
+  pais: 'País',
+  funcion: 'Función en ACOES',
+  prefijo: 'Prefijo',
+  celular: 'Celular',
+  correo: 'Correo',
+  direccion: 'Dirección',
+  distrito: 'Distrito',
+  departamento: 'Departamento',
+  municipio: 'Municipio',
+  courseId: 'Curso',
+  entidad: 'Entidad / organización',
+  capacitacion: 'Capacitación',
+  nivelEducativo: 'Nivel educativo',
+  observaciones: 'Observaciones',
+  autorizaDatos: 'Autorización de datos',
+}
 
 /**
  * Form state typed loosely: `funcion` is the user-controlled public-role
@@ -192,9 +229,16 @@ export function RegistroPage() {
           }
         }
         setErrors(fieldErrors)
+        // Jump to the step that contains the first error field instead of
+        // always step 1, so the user can actually see the field that's
+        // failing (e.g. `courseId` and `capacitacion` are on step 3, not
+        // step 1; jumping to step 1 made the error invisible).
         const firstField = Object.keys(fieldErrors)[0]
         if (firstField) {
-          setStep(1)
+          const targetStep = stepForField(firstField)
+          if (targetStep !== null && targetStep !== step) {
+            setStep(targetStep)
+          }
           window.requestAnimationFrame(() => {
             const el = document.querySelector<HTMLElement>(`[name="${firstField}"]`)
             el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -341,6 +385,25 @@ export function RegistroPage() {
                 </p>
               </div>
             </div>
+
+            {(submissionError || Object.keys(errors).length > 0) && step !== 3 && (
+              <div className="mb-6 p-4 rounded-xl bg-error/10 border border-error/30 text-error flex items-start gap-3" role="alert" data-testid="submit-error-banner">
+                <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold">No se pudo completar el registro</p>
+                  {submissionError && <p className="mt-1 text-sm">{submissionError}</p>}
+                  {Object.keys(errors).length > 0 && (
+                    <ul className="mt-2 text-sm space-y-0.5">
+                      {Object.entries(errors).map(([field, msg]) => (
+                        <li key={field}>
+                          • <strong>{fieldLabels[field] ?? field}:</strong> {msg}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
 
             <form className="bg-charcoal-light rounded-2xl border border-warm-tan/10 p-6 md:p-10" onSubmit={handleFormSubmit}>
               {step === 3 && (
