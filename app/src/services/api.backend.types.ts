@@ -109,3 +109,31 @@ export type PublicEnrollmentLink = {
   token: string;
   course: PublicEnrollmentCourse;
 };
+
+/**
+ * Result of a public enrollment attempt against `POST /api/public/enrollments`.
+ *
+ * The backend distinguishes between "we found the participant and created
+ * the enrollment" (201 with `{ data }`) and "we did not find a participant
+ * with that DUI; here's a redirect to the registration page" (200 with
+ * `{ redirect }`). The SPA's `inscribir()` returns this union so the caller
+ * can branch on `kind` and either show success or navigate the round-trip.
+ *
+ * See `openspec/changes/acoes-dui-enrollment-flow/specs/public-enrollment-by-dui/spec.md`.
+ */
+export type PublicEnrollmentResult =
+  | {
+      kind: 'enrollment';
+      data: {
+        id: number;
+        course_id: number;
+        participant_id: number;
+        full_name: string;
+        email: string | null;
+        phone: string;
+        dui: string | null;
+        fecha_inscripcion: string;
+        estado: string;
+      };
+    }
+  | { kind: 'redirect'; redirect: string };

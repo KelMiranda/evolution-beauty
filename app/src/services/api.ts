@@ -4,7 +4,7 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 import type { Registro, User, Curso, InscripcionCurso, DashboardStats, LoginCredentials } from '@/types'
 
 // Import our backend types for mapping
-import type { AuthUser, BackendUser, Participant, Course, ParticipantHistoryEntry, CoursePublicLink, PublicEnrollmentLink } from './api.backend.types'
+import type { AuthUser, BackendUser, Participant, Course, ParticipantHistoryEntry, CoursePublicLink, PublicEnrollmentLink, PublicEnrollmentResult } from './api.backend.types'
 
 /**
  * Shape of the `validation_failed` envelope the backend returns on a Zod
@@ -501,28 +501,54 @@ export async function getInscripciones(cursoId: string): Promise<InscripcionCurs
   }));
 }
 
-export async function inscribir(data: Omit<InscripcionCurso, 'id' | 'fechaInscripcion' | 'estado'>, token?: string): Promise<InscripcionCurso> {
-  const path = token ? '/api/public/enrollments' : '/api/enrollments';
-  const response = await api.post<{ data: unknown }>(path, {
-    ...(token ? { token } : { courseId: parseInt(data.cursoId) }),
-    fullName: data.nombre,
-    email: data.correo,
-    phone: data.telefono,
-    dui: data.dui,
-    notas: data.notas,
-  });
-  
-  const e = response.data as any;
+/**
+ * Public enrollment submission (PR3 contract).
+ *
+ * The backend accepts only `{ token, dui }` and replies with one of:
+ *
+ *   • 201 + `{ data: enrollment }` → `{ kind: 'enrollment', data }`
+ *   • 200 + `{ redirect: '/registro?redirect=...' }` → `{ kind: 'redirect', redirect }`
+ *   • 4xx → `throw` with the backend's error message (e.g., malformed DUI,
+ *     course full, invalid token)
+ *
+ * The previous 5-field payload (`nombre`, `correo`, `telefono`, `notas`)
+ * is no longer accepted by the public path; the SPA now collects only the
+ * DUI and lets the backend resolve the participant. Admin enrollment
+ * creation goes through `POST /api/enrollments` directly (see
+ * `src/pages/api/enrollments.ts`); this helper only covers the public flow.
+ *
+ * See `openspec/changes/acoes-dui-enrollment-flow/specs/public-enrollment-by-dui/spec.md`.
+ */
+export async function inscribir(
+  data: { cursoId: string; dui: string },
+  token: string,
+): Promise<PublicEnrollmentResult> {
+  if (!token) {
+    throw new Error('La inscripción pública requiere un token');
+  }
+
+  const response = await api.post<{ data?: unknown; redirect?: string }>(
+    '/api/public/enrollments',
+    {
+      token,
+      dui: data.dui,
+    },
+  );
+
+  if (
+    response &&
+    typeof response === 'object' &&
+    'redirect' in response &&
+    typeof (response as { redirect?: unknown }).redirect === 'string'
+  ) {
+    return { kind: 'redirect', redirect: (response as { redirect: string }).redirect };
+  }
+
   return {
-    id: String(e.id),
-    cursoId: String(e.course_id),
-    nombre: e.full_name,
-    correo: e.email,
-    telefono: e.phone,
-    dui: e.dui || '',
-    fechaInscripcion: e.fecha_inscripcion,
-    estado: 'confirmada',
-    notas: e.notas || '',
+    kind: 'enrollment',
+    data: response.data as PublicEnrollmentResult extends { kind: 'enrollment'; data: infer D }
+      ? D
+      : never,
   };
 }
 
