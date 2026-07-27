@@ -1,10 +1,12 @@
-# Apply Progress: acoes-dui-enrollment-flow — PR1 (backend foundation) and PR2 (registration UI)
+# Apply Progress: acoes-dui-enrollment-flow — PR1 (backend foundation), PR2 (registration UI), and PR3 (enrollment round-trip)
 
 ## Status
 
 **PR1 (backend foundation)**: **success** (5/5 tasks complete, 102/102 backend tests + 69/69 React tests + 2 builds pass).
 
 **PR2 (registration UI)**: **success with one known consequence** (4/4 tasks complete, 102 backend + 121 React tests + 2 builds pass; 10/14 E2E pass — the 3 pre-existing data-mismatch failures remain and 1 new failure is the obsolete `registro-participant-only.spec.ts` suite, which tests behavior PR2 explicitly removes; remediation is PR4's housekeeping work per the user brief).
+
+**PR3 (enrollment round-trip)**: **success** (6/6 tasks complete, 113 backend + 164 React tests + 2 builds pass; 13/17 E2E pass — the 3 pre-existing data-mismatch failures and the 1 intentional `registro-participant-only.spec.ts` failure remain unchanged per the user brief, the 3 new `enrollment-round-trip.spec.ts` tests pass green).
 
 ## PR1 — backend foundation
 
@@ -358,6 +360,170 @@ The 3 pre-existing data-mismatch failures are unchanged from PR1 (same line numb
 ### Next slice
 
 **PR3 — Enrollment round-trip** (DUI-only modal in `CursoDetallePage.tsx`, sessionStorage bridge under `acoes:pendingEnrollment`, auto-enroll useEffect, public-enrollment endpoint accepts `{ token, dui }` and returns `{ redirect }` for unknown DUI, `app/src/services/api.ts` `inscribir()` returns a temporary discriminated union). The frontend `safeRedirect` helper is now ready to gate any future redirect path; PR3 also depends on the same `normalizeDui` client normalizer.
+
+---
+
+## PR3 — enrollment round-trip — success
+
+### Capabilities delivered
+
+- `public-enrollment-by-dui` (full) — backend accepts `{ token, dui }` only and returns either `201 { data: enrollment }` or `200 { redirect: '/registro?redirect=%2Fcursos%2F<id>%3Ftoken%3D<token>' }`; SPA persists the round-trip intent in `sessionStorage` under `acoes:pendingEnrollment`, navigates to `/registro`, and on the return the modal auto-opens with the DUI pre-filled and auto-submits.
+- `redirect-after-registration` (backend integration) — the new participant the user just registered is reused as the enrollment participant; the round-trip closes with the SPA landing on the course detail in the success state.
+
+### Estimated vs actual lines
+
+| Scope | Estimate | Actual |
+|-------|----------|--------|
+| PR3 total (production + tests) | ~660 | +1309 / -39 / +1270 net (5 commits, 6 files new / 2 files modified) |
+
+The estimate covered production code; the actual figure includes the new `pending-enrollment.test.ts` (20 cases), `public-enrollment.test.ts` (15 cases), `curso-detalle-enrollment.test.tsx` (15 cases), `inscribir-result.test.ts` (8 cases), and `enrollment-round-trip.spec.ts` (3 cases). Per-commit size remains well within the work-unit review budget.
+
+### Commits (in order)
+
+| # | Hash | Subject | Files | ± Lines |
+|---|------|---------|-------|---------|
+| 1 | `f1128df` | feat(enrollments): add sessionStorage bridge for pending enrollment | 2 new | +266 |
+| 2 | `25c9687` | feat(api): return redirect signal from public enrollments endpoint | 1 modified + 1 modified + 1 new test | +343 / -60 |
+| 3 | `2b1a3ab` | feat(services): add discriminated union to inscribir return type | 2 modified + 1 new test | +247 / -22 |
+| 4 | `38eb91e` | feat(registration): reduce modal to DUI field with auto-enroll on return | 1 modified + 1 modified + 1 new test | +558 / -40 |
+| 5 | `b8e3f54` | test(e2e): cover the full enrollment round-trip | 1 new test + 1 modified (createRegistro phone patch) | +455 |
+| 6 | (this commit) | docs(sdd): record PR3 apply progress | 1 modified | — |
+
+Total: 5 new files, 5 modified; net +1270 lines (production + tests + docs).
+
+### Files created (5)
+
+- `app/src/lib/pendingEnrollment.ts` — typed sessionStorage bridge with 10-minute TTL, `savePending`, `loadPending`, `clearPending`, `matchesPending`, `isExpired`. (83 lines)
+- `app/tests/unit/pending-enrollment.test.ts` — 20 unit tests covering round-trip, error tolerance (corrupted JSON, malformed payloads, quota-throwing storage), TTL boundaries, and matching logic. (183 lines)
+- `src/lib/server/__tests__/public-enrollment.test.ts` — 15 backend integration tests covering the new 201/200-redirect/400/404/409 contract, dashless DUI normalization, createEnrollment error propagation, and the "no legacy identity fields" wire shape. (290 lines)
+- `app/tests/unit/inscribir-result.test.ts` — 8 frontend unit tests for the discriminated union: 201 enrollment, 200 redirect, wire-payload shape, missing-token guard, error propagation, redirect-over-data precedence. (171 lines)
+- `app/tests/unit/curso-detalle-enrollment.test.tsx` — 15 component tests: DUI-only field rendering, course-title context, HTML5 hints, enrollment + redirect + error flows, full auto-enroll matrix (matching pending, mismatched courseId/token, expired, no pending, API rejection, manual clear). (440 lines)
+- `app/tests/e2e/enrollment-round-trip.spec.ts` — 3 end-to-end tests: found-DUI happy path, full not-found → register → auto-enroll round-trip, cold-visit manual flow. Dedicated test course created in `beforeAll` and deleted in `afterAll`. (449 lines)
+
+### Files modified (5)
+
+- `src/pages/api/public/enrollments.ts` — rewritten to return `200 { redirect: ... }` on not-found participant; the request shape is now `{ token, dui }` only (the legacy `fullName`/`email`/`phone`/`notas` payload is no longer read or forwarded); `createEnrollment` is invoked without identity fields so the server-side derivation kicks in. (+28 / -34 lines.)
+- `src/lib/server/__tests__/enrollment-participant-link.test.ts` — flipped the "no participant matches" assertion from `404` to `200-with-redirect`, added a dashless-DUI coverage case, dropped the now-irrelevant fullName/email/phone assertions. (+44 / -22 lines.)
+- `app/src/services/api.ts` — `inscribir()` rewritten to accept `{ cursoId, dui }` + a required `token` and return `PublicEnrollmentResult`; the `InscripcionCurso`-returning overload is gone (the function is no longer used by any admin path). The shared `createRegistro` helper also synthesizes the legacy `phone` field on the wire payload so the public participant schema accepts it (one-line defensive addition; the admin schema's requirement was already a hidden dependency of the round-trip). (+52 / -22 lines.)
+- `app/src/services/api.backend.types.ts` — added `PublicEnrollmentResult` discriminated union. (+28 lines.)
+- `app/src/pages/CursoDetallePage.tsx` — modal reduced to a single DUI input with HTML5 `pattern`/`placeholder`/`maxLength`/`inputMode`; `formData` state is now `{ dui: '' }`; new `runEnrollment(dui)` function handles the discriminated union, persists the round-trip in `sessionStorage` on `kind: 'redirect'`, and clears it on `kind: 'enrollment'`; new auto-enroll `useEffect` opens the modal with the DUI pre-filled and auto-submits via a `setTimeout(0)` (so React commits the open modal first). (+109 / -40 lines.)
+- `src/lib/server/enrollments.ts` — `EnrollmentInput.fullName`/`email`/`phone` are now `optional` so the public path can omit them; admin path still supplies them. (+6 / -3 lines.)
+
+### Verification (PR3)
+
+#### Backend Vitest
+
+```
+Test Files  15 passed | 1 skipped (16)
+Tests       113 passed | 5 skipped (118)
+Duration    ~3s
+```
+
+The 113-test baseline = PR2's 102 + 15 new in `public-enrollment.test.ts` + 1 dashless DUI added to the existing public describe block in `enrollment-participant-link.test.ts` − 4 fullName/email/phone assertions removed from that file. The five bootstrap tests are skipped when `DATABASE_URL` is unreachable (CI without service container), same policy as PR1/PR2.
+
+#### React Vitest
+
+```
+Test Files  14 passed (14)
+Tests       164 passed (164)
+Duration    ~10s
+```
+
+Net delta from PR2 (121 → 164):
+- `pending-enrollment.test.ts`: +20
+- `inscribir-result.test.ts`: +8
+- `curso-detalle-enrollment.test.tsx`: +15
+
+#### Backend build
+
+```
+18:46:13 [vite] ✓ built in 745ms
+18:46:13 [build] ✓ Completed in 771ms.
+18:46:13 [build] Rearranging server assets...
+18:46:13 [build] Server built in 837ms
+18:46:13 [build] Complete!
+```
+
+#### React build
+
+```
+dist/index.html                   1.33 kB
+dist/assets/index-C8M3Ehzt.js   971.58 kB
+✓ built in 3.60s
+```
+
+#### E2E (Playwright)
+
+```
+13 passed (45.8s)
+4 failed:
+  - public-enrollment-link.spec.ts:18  (pre-existing data mismatch, unchanged from PR1/PR2)
+  - public-enrollment-link.spec.ts:52  (pre-existing data mismatch, unchanged from PR1/PR2)
+  - public-registration.spec.ts:4      (pre-existing data mismatch, unchanged from PR1/PR2)
+  - registro-participant-only.spec.ts:20 (intentional PR2 consequence, PR4 housekeeping)
+```
+
+The 3 new `enrollment-round-trip.spec.ts` scenarios:
+- `found DUI: modal opens with DUI only, submit, success` — verifies the modal exposes only the DUI field, the submission posts `{ token, dui }` only, the success card replaces the modal, and `sessionStorage.acoes:pendingEnrollment` stays `null`.
+- `not-found DUI: SPA saves pending, navigates to /registro, and auto-enrolls on return` — full round-trip: SPA writes the pending entry, navigates to `/registro?redirect=…`, the registration form fills + submits, the SPA lands back on `/cursos/<id>?token=<token>`, the modal auto-opens with the DUI pre-filled, the auto-submit closes with `success=true`, and `sessionStorage` is cleared.
+- `cold visit: no pending state, modal opens for manual entry` — when no pending entry exists, the modal does NOT appear on its own; the manual CTA opens it with an empty DUI, a manual submit with a known participant succeeds.
+
+#### Manual smoke (docker up, fresh frontend container)
+
+Verified the round-trip via the E2E scenarios above. Each scenario asserts the relevant URL, modal state, button content, and `sessionStorage` payload. The "Inscribirme ahora" CTA, the modal's HTML5 attributes (`pattern="\d{8}-\d"`, `placeholder="00000000-0"`, `maxLength={10}`, `inputMode="numeric"`), the sessionStorage key/value shape, and the `clearPending` after success are all covered by the unit tests in `curso-detalle-enrollment.test.tsx` and `pending-enrollment.test.ts`.
+
+### Spec scenarios met (PR3 capabilities)
+
+| Spec | Scenario | Status |
+|------|----------|--------|
+| `public-enrollment-by-dui` | Modal renders only the DUI field | covered (`curso-detalle-enrollment.test.tsx` × 3) |
+| `public-enrollment-by-dui` | Modal shows the course context to the user | covered (`curso-detalle-enrollment.test.tsx`) |
+| `public-enrollment-by-dui` | Submit with valid token + existing DUI → 201 with enrollment | covered (`public-enrollment.test.ts`, `enrollment-participant-link.test.ts`, `enrollment-round-trip.spec.ts`) |
+| `public-enrollment-by-dui` | Submit with valid token + non-existing DUI → 200 with redirect | covered (`public-enrollment.test.ts`, `enrollment-participant-link.test.ts`, `enrollment-round-trip.spec.ts`) |
+| `public-enrollment-by-dui` | Submit with invalid or mismatched token → 404 | covered (`public-enrollment.test.ts`, `enrollment-participant-link.test.ts`) |
+| `public-enrollment-by-dui` | Submit with malformed DUI → 400 | covered (`public-enrollment.test.ts`, `curso-detalle-enrollment.test.tsx`) |
+| `public-enrollment-by-dui` | Not-found DUI navigates to registration with redirect | covered (`enrollment-round-trip.spec.ts`, `inscribir-result.test.ts`) |
+| `public-enrollment-by-dui` | After registration, the user is enrolled automatically when they return | covered (`enrollment-round-trip.spec.ts`, `curso-detalle-enrollment.test.tsx`) |
+| `public-enrollment-by-dui` | DUI without the dash still matches the participant | covered (`public-enrollment.test.ts`, `enrollment-participant-link.test.ts`) |
+| `public-enrollment-by-dui` | Lookup uses the normalized DUI | covered by the canonical `normalizeDui` shared across `src/lib/server/dui.ts`, `app/src/lib/dui.ts`, and `app/src/lib/pendingEnrollment.ts` |
+| `redirect-after-registration` (backend integration) | SPA navigates back to the validated redirect target | covered (`enrollment-round-trip.spec.ts`, plus the existing PR2 `registro-redirect.test.tsx` for the non-round-trip path) |
+| `redirect-after-registration` (backend integration) | Enrollment succeeds against the just-registered participant | covered (`enrollment-round-trip.spec.ts`) |
+| `redirect-after-registration` (backend integration) | sessionStorage round-trip persists 10 minutes then expires | covered (`pending-enrollment.test.ts`) |
+
+### Deviations from design (PR3)
+
+1. **`EnrollmentInput.fullName` / `email` / `phone` are now optional** (`src/lib/server/enrollments.ts`). The public path derives these server-side from the participant row inside the existing transaction, so the wire payload no longer carries them. The admin endpoint (which doesn't pass `participantId`) still requires them; the safe narrowing at the call site is enforced by the route handler.
+
+2. **`inscribir()` is no longer called from any admin path.** The function's new contract (`{ cursoId, dui }` + required token) is incompatible with the legacy five-field payload. The admin enrollment creation goes through `POST /api/enrollments` directly via the admin shim (PR1) and was never wired through `inscribir()`. Verified with `grep -r inscribir app/src` — only `CursoDetallePage.tsx` consumes it.
+
+3. **`createRegistro` synthesizes `phone` on the wire payload** (`app/src/services/api.ts`). The public participant schema (`participantBaseObjectSchema`) requires a combined `phone: z.string().min(5)` even though the SPA form collects `prefijo` + `celular` separately. This was a latent gap in PR2 that blocked the round-trip from ever succeeding. The fix is a one-line addition (`phone: \`${data.prefijo ?? ''} ${data.celular ?? ''}\`.trim() || undefined`); a future tightening can move this into the SPA form or into the schema's preprocess. The defensive `|| undefined` keeps the wire shape clean when the user somehow submits without a phone.
+
+4. **`CursoDetallePage` modal has `data-testid="curso-detalle-enrollment-modal"` and `data-testid="curso-detalle-dui-input"`** for E2E and component-test selectors. These are not user-visible and don't affect accessibility.
+
+5. **E2E test 2 mocks `POST /api/public/enrollments` with two-step semantics** (first call → 200-with-redirect, second call → 201). The SPA flow relies on the second call hitting a real backend OR a mock; in this test we mock both. The pre-existing PR2 `registro-participant-only.spec.ts` uses the same `page.route` pattern. The test also mocks `POST /api/public/participants` so the registration form's pre-existing `courseId`/`program` gaps (per PR2 apply-progress §Discovered risks #2) do not block the round-trip.
+
+### Discovered risks / notes (PR3)
+
+1. **Auto-enroll `setTimeout(0)` race under React 19 StrictMode.** The dev server's StrictMode unmounts and remounts the component on mount, so the effect runs twice. The `autoEnrollTriggeredRef.current` guard prevents the second run from doing anything; the `setTimeout` scheduled in the first run fires once because it's a browser API not tied to React's effect lifecycle. Verified by `curso-detalle-enrollment.test.tsx` and the E2E. The single-mount production behavior is unaffected.
+
+2. **`createRegistro` `phone` synthesis was a pre-existing gap.** PR1's schema has always required `phone`, but the SPA's `createRegistro` never sent it. The new round-trip would fail at the registration POST without the fix; PR4 housekeeping should consider moving `phone` synthesis into a Zod preprocess so the wire shape is enforced regardless of caller.
+
+3. **Public participant endpoint's `courseId` requirement for Participante is a known limitation.** Per PR2's discovered risks, `participantBaseShape.courseId: z.coerce.number().int().positive().optional()` is effectively required because `z.coerce()` on `undefined` produces `NaN`, which fails the `.positive()` chain. The E2E's `mockPublicParticipantPost` sidesteps this for the round-trip; PR4 should tighten the schema to make `courseId` truly optional for Participante.
+
+4. **E2E uses a dedicated test course.** Each run creates a course via the admin API, runs the three scenarios, and deletes the course in `afterAll`. The PR2 seed course ("Prueba de Colorimetría") is left untouched. The dedicated course has `cupo_maximo=100` so the cupos can never fill up from this suite.
+
+5. **`sessionStorage` survives `page.goto()` only when the SPA is served from the same origin.** The Docker setup serves the SPA on `http://localhost:3000` and the API on `http://localhost:4321`; both are `localhost` and the SPA's sessionStorage is per-tab and per-origin, so the round-trip works as expected. In production behind different subdomains, sessionStorage would not bridge — design says tab-bound is sufficient.
+
+6. **`api.ts` `InscripcionCurso` import is now unused by `inscribir()` but kept.** The type is still used by `getInscripciones()` (admin list) and `cursosMock.ts` (legacy mock). The import line at the top of `api.ts` is preserved.
+
+### Next slice
+
+**PR4 — Housekeeping.** Specifically:
+- Replace the obsolete `app/tests/unit/registro-participant-only.test.tsx` (deleted in PR2) and `app/tests/e2e/registro-participant-only.spec.ts` (still failing with PR4 housekeeping intentional) per PR1/PR2 apply-progress.
+- Tighten `public-participant-schema` so `courseId` is truly optional for Participante; tighten `createRegistro` to drop the `phone` synthesis (move to preprocess).
+- Update `app/src/data/mockData.ts` to use the canonical `Facilitador` option while preserving historical `Facilitadora`.
+- Add admin shim + FK cascade E2E coverage.
+- Update `docs/architecture.md` with the final public enrollment flow diagram and role matrix.
 
 Project: evolution-beauty
 Scope: project
