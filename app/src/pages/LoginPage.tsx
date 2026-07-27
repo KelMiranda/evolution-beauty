@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { Turnstile } from '@/components/Turnstile'
 import { Eye, EyeOff, ArrowRight, Lock, Mail } from 'lucide-react'
 import { AnimatedText, FadeIn, PageTransition } from '@/components/animations'
 
@@ -12,13 +13,20 @@ export function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileUnavailable, setTurnstileUnavailable] = useState(false)
+  const sitekey = import.meta.env.VITE_TURNSTILE_SITEKEY ?? ''
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (sitekey && !turnstileUnavailable && !turnstileToken) {
+      setError('Por favor completá la verificación de seguridad')
+      return
+    }
     setLoading(true)
     try {
-      await login({ correo, contrasena })
+      await login({ correo, contrasena, turnstileToken: turnstileToken ?? '' })
       navigate('/dashboard')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
@@ -91,6 +99,19 @@ export function LoginPage() {
                   </FadeIn>
                 )}
 
+                {sitekey && !turnstileUnavailable && (
+                  <div className="flex justify-center">
+                    <Turnstile
+                      siteKey={sitekey}
+                      onToken={setTurnstileToken}
+                      onUnavailable={() => {
+                        console.warn('[turnstile] Widget unavailable; allowing login without a token')
+                        setTurnstileUnavailable(true)
+                      }}
+                    />
+                  </div>
+                )}
+
                 <button type="submit" disabled={loading}
                   className="w-full py-3.5 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-all flex items-center justify-center gap-2 disabled:opacity-50 group">
                   {loading ? (
@@ -100,12 +121,6 @@ export function LoginPage() {
                   )}
                 </button>
               </form>
-
-              <div className="mt-6 pt-6 border-t border-warm-tan/10">
-                <p className="text-xs text-warm-gray/50 text-center">
-                  Usuario: <span className="text-gold/70 font-medium">admin@acoes.local</span> / <span className="text-gold/70 font-medium">Admin1234!</span>
-                </p>
-              </div>
             </div>
           </FadeIn>
 

@@ -99,4 +99,10 @@ export interface DashboardStats {
 export interface LoginCredentials {
   correo: string
   contrasena: string
+  /**
+   * Cloudflare Turnstile verification token. Empty string when the widget
+   * is disabled in dev mode (no `VITE_TURNSTILE_SITEKEY` configured); the
+   * backend no-ops verification in that case.
+   */
+  turnstileToken?: string
 }

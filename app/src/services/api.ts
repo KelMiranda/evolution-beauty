@@ -113,6 +113,7 @@ export async function login(credentials: LoginCredentials): Promise<{ user: User
   const response = await api.post<{ user: AuthUser; redirectTo: string }>('/api/login', {
     email: credentials.correo,
     password: credentials.contrasena,
+    turnstileToken: credentials.turnstileToken ?? '',
   });
   
   // Map our AuthUser to reference User
