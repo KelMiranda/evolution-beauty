@@ -250,7 +250,12 @@ export async function getRegistro(id: string): Promise<Registro> {
 }
 
 export async function createRegistro(data: Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado'>): Promise<Registro> {
-  // Map Registro to our backend Participant format
+  // Map Registro to our backend Participant format. The public schema
+  // (`publicParticipantSubmissionSchema`) preprocesses the wire payload
+  // and synthesizes a combined `phone` value from `phone_dial_code` +
+  // `phone_number` when the SPA omits it, so we no longer build the
+  // combined string on the client (PR4 housekeeping — the previous
+  // defensive patch was a hidden dependency of the round-trip).
   const backendData = {
     courseId: data.courseId ? Number(data.courseId) : undefined,
     full_name: data.nombre,
@@ -260,12 +265,6 @@ export async function createRegistro(data: Omit<Registro, 'id' | 'codigo' | 'fec
     phone_country: data.pais,
     phone_dial_code: data.prefijo,
     phone_number: data.celular,
-    // The public participant schema (`participantBaseObjectSchema`) requires
-    // a combined `phone` string (>= 5 chars). The SPA collects the country
-    // prefix and the local number in two separate fields; we synthesize the
-    // legacy `phone` value here so the wire payload satisfies the schema and
-    // the enrollment round-trip (PR3) can complete end-to-end.
-    phone: `${data.prefijo ?? ''} ${data.celular ?? ''}`.trim() || undefined,
     email: data.correo,
     address: data.direccion,
     municipality: data.municipio,

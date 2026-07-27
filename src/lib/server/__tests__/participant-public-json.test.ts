@@ -222,4 +222,42 @@ describe('POST /api/public/participants (JSON branch)', () => {
     const createArgs = createParticipantMock.mock.calls[0]?.[0] as { notes: unknown };
     expect(createArgs.notes).toBeUndefined();
   });
+
+  it('synthesizes the combined phone from phone_dial_code + phone_number when the wire payload omits it', async () => {
+    createParticipantMock.mockResolvedValue({ id: 200, participant_code: 'ACOES-2026-0200' });
+
+    // Strip the explicit `phone` key — the public schema's preprocess should
+    // synthesize it before the underlying validator runs.
+    const payloadWithoutPhone = { ...baseValidPayload, roleFunction: 'Participante' };
+    delete (payloadWithoutPhone as Record<string, unknown>).phone;
+
+    const response = await POST({
+      request: makeRequest(payloadWithoutPhone),
+    } as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(201);
+
+    const createArgs = createParticipantMock.mock.calls[0]?.[0] as { phone: string };
+    expect(createArgs.phone).toBe('+503 7000-0001');
+  });
+
+  it('does NOT crash the route handler when both phone and phone_number are missing', async () => {
+    // Strip both camelCase and snake_case aliases so the route handler's
+    // `pickString` fallbacks return `''` — the schema preprocess must then
+    // surface a 400 with a clear `phoneNumber` / `phone` issue instead of
+    // passing an empty phone through to `createParticipant`.
+    const payloadWithoutPhone = { ...baseValidPayload, roleFunction: 'Participante' };
+    delete (payloadWithoutPhone as Record<string, unknown>).phone;
+    delete (payloadWithoutPhone as Record<string, unknown>).phone_number;
+    (payloadWithoutPhone as Record<string, unknown>).phoneNumber = '';
+
+    const response = await POST({
+      request: makeRequest(payloadWithoutPhone),
+    } as Parameters<typeof POST>[0]);
+    expect(response.status).toBe(400);
+
+    const body = (await response.json()) as { error: string; issues: Array<{ path: (string | number)[] }> };
+    expect(body.error).toBe('validation_failed');
+    const phonePaths = body.issues.map((issue) => issue.path[0]).filter((p) => p === 'phoneNumber');
+    expect(phonePaths.length).toBeGreaterThan(0);
+  });
 });
