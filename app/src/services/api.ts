@@ -151,6 +151,32 @@ export async function getFacilitators(): Promise<Array<{ id: string; name: strin
     .map(user => ({ id: String(user.id), name: user.full_name }));
 }
 
+export type EquipoUser = {
+  id: string
+  email: string
+  fullName: string
+  role: 'admin' | 'empleado'
+  active: boolean
+};
+
+/**
+ * Members of the in-house team (admins + empleados) shown on the dashboard's
+ * Equipo panel. Excludes `facilitador` and `participante` rows — facilitators
+ * have their own panel and participants are public registrations.
+ */
+export async function getEquipoUsers(): Promise<EquipoUser[]> {
+  const response = await api.get<{ data: BackendUser[] }>('/api/users');
+  return response.data
+    .filter(user => user.role === 'admin' || user.role === 'empleado')
+    .map(user => ({
+      id: String(user.id),
+      email: user.email,
+      fullName: user.full_name,
+      role: user.role as 'admin' | 'empleado',
+      active: user.active,
+    }));
+}
+
 export function logout(): void {
   // Call our backend logout endpoint
   api.post('/api/logout').catch(console.error);

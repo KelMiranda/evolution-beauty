@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useRegistros } from '@/hooks/useRegistros'
+import { useUsers } from '@/hooks/useUsers'
 import { createCoursePublicLink, downloadParticipantsXlsx, getCourseRecords } from '@/services/api'
 import { FadeIn, CountUp } from '@/components/animations'
 import { splitFacilitadores } from '@/utils/facilitadores'
+import { EQUIPO_POLICIES, EQUIPO_ROLE_LABEL } from '@/utils/equipo'
 import {
   Users, GraduationCap, TrendingUp, BookOpen,
   Search, Download, ChevronLeft, ChevronRight,
@@ -19,6 +21,7 @@ const COLORS = ['#C9A84C', '#8B7355', '#6B5A44', '#A08B6D']
 
 export function DashboardPage() {
   const { stats } = useDashboard()
+  const { users: equipoUsers, loading: equipoLoading } = useUsers()
   const [courses, setCourses] = useState<Awaited<ReturnType<typeof getCourseRecords>>>([])
   const [links, setLinks] = useState<Record<string, { token: string; publicUrl: string }>>({})
   const [linkLoadingId, setLinkLoadingId] = useState<string | null>(null)
@@ -314,6 +317,73 @@ export function DashboardPage() {
                         <UserPlus className="w-3.5 h-3.5" />
                         Asignar curso
                       </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </FadeIn>
+
+      {/* Equipo — admin + empleado users with policy descriptions */}
+      <FadeIn delay={0.13}>
+        <div className="bg-charcoal-light rounded-xl border border-warm-tan/[0.08] overflow-hidden">
+          <div className="p-4 lg:p-5 border-b border-warm-tan/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-display text-lg text-ivory">Equipo</h3>
+              <p className="text-[11px] text-warm-gray/50 mt-1">
+                Usuarios internos (administradores y empleados) y el alcance de sus permisos en el sistema.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-gold/15 bg-gold/5 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-gold">
+              <BadgeCheck className="w-3.5 h-3.5" />
+              {equipoUsers.length} {equipoUsers.length === 1 ? 'miembro' : 'miembros'}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px]">
+              <thead>
+                <tr className="border-b border-warm-tan/[0.08]">
+                  {['Correo', 'Nombre', 'Rol', 'Estado', 'Permisos'].map((h, i) => (
+                    <th key={i} className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {equipoLoading ? (
+                  Array.from({ length: 2 }).map((_, i) => (
+                    <tr key={i} className="border-b border-warm-tan/[0.03]">
+                      {Array.from({ length: 5 }).map((_, j) => (
+                        <td key={j} className="px-4 py-4"><div className="h-3 bg-warm-tan/10 rounded animate-pulse" /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : equipoUsers.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-10 text-center text-warm-gray/40">No hay miembros del equipo todavía.</td></tr>
+                ) : equipoUsers.map(user => (
+                  <tr key={user.id} className="border-b border-warm-tan/[0.03] hover:bg-charcoal/30 transition-colors">
+                    <td className="px-4 py-3.5">
+                      <p className="text-sm text-ivory font-medium font-mono">{user.email}</p>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <p className="text-sm text-ivory">{user.fullName}</p>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${user.role === 'admin' ? 'bg-gold/10 text-gold' : 'bg-warm-tan/10 text-warm-gray'}`}>
+                        {EQUIPO_ROLE_LABEL[user.role]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${user.active ? 'bg-success/10 text-success' : 'bg-warm-tan/10 text-warm-gray'}`}>
+                        {user.active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <p className="text-[11px] text-warm-gray/60 leading-relaxed max-w-md">
+                        {EQUIPO_POLICIES[user.role]}
+                      </p>
                     </td>
                   </tr>
                 ))}
