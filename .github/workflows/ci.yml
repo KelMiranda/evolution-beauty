@@ -127,12 +127,15 @@ jobs:
         run: npx playwright install chromium --with-deps
         working-directory: app
 
-      - name: Build Astro backend
-        run: npm run build
-
       - name: Build React app
         run: npm run build
         working-directory: app
+
+      - name: Stage React app for Astro
+        run: cp -R app/dist/. public/
+
+      - name: Build Astro server
+        run: npm run build
 
       - name: Wait for PostgreSQL
         shell: bash
@@ -154,8 +157,8 @@ jobs:
             exit 1
           fi
 
-      # Playwright starts the SPA through app/playwright.config.ts. Starting a
-      # second Vite process here would collide because CI never reuses a server.
+      # Playwright targets the unified Astro server, which serves both the
+      # staged SPA build and API from port 4321.
       - name: Run Playwright E2E
         run: npx playwright test
         working-directory: app

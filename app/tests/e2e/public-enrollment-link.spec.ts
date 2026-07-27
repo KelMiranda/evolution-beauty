@@ -46,19 +46,19 @@ test.describe('Public enrollment link generated from the SPA', () => {
     expect(body.data.token).toBeTruthy();
     expect(body.data.publicUrl).toBeTruthy();
 
-    // Guard against regression: the URL must point to the SPA (not the
-    // backend) and must include the '#' so HashRouter can route.
+    // Guard against regression: the URL must point to the unified Astro
+    // origin and include the '#' so HashRouter can route.
     expect(body.data.publicUrl).toContain(`#/cursos/${courseId}`);
     expect(body.data.publicUrl).toContain('?token=');
-    expect(body.data.publicUrl).not.toContain(':4321');
+    expect(body.data.publicUrl).toContain(':4321');
 
-    // Hit the URL as an anonymous caller (no admin cookies) so the middleware
-    // redirect + HashRouter route can be exercised end-to-end.
+    // Hit the URL as an anonymous caller (no admin cookies) so Astro's static
+    // SPA serving and HashRouter route can be exercised end-to-end.
     const nav = await request.get(body.data.publicUrl, { maxRedirects: 5 });
     expect(nav.status()).toBe(200);
     expect(nav.url()).toContain(`#/cursos/${courseId}`);
     expect(nav.url()).toContain('token=');
-    expect(nav.url()).not.toContain(':4321');
+    expect(nav.url()).toContain(':4321');
 
     // Open the link in the browser context. The SPA should render the
     // course detail page with the course name visible.
@@ -81,11 +81,9 @@ test.describe('Public enrollment link generated from the SPA', () => {
     expect(parsed.hash).toContain(`token=${body.data.token}`);
   });
 
-  test('the backend middleware redirects a non-API path to the SPA with the hash', async ({ request }) => {
-    // Hit the backend directly with a bare path that mimics a malformed
-    // public link (no '#' on the request URL). The middleware should
-    // 302 to the SPA with the route in the hash. Use the resolved
-    // course id so the assertion stays in sync with the seed.
+  test('Astro serves the SPA fallback for a non-API path', async ({ request }) => {
+    // Hit the unified server with a bare path that does not match a static
+    // asset or API route. The middleware should return the SPA shell.
     const adminLogin = await request.post('http://localhost:4321/api/login', {
       headers: { 'Content-Type': 'application/json' },
       data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
@@ -101,9 +99,8 @@ test.describe('Public enrollment link generated from the SPA', () => {
       failOnStatusCode: false,
     });
 
-    expect(response.status()).toBe(302);
-    const location = response.headers()['location'] ?? '';
-    expect(location).toContain(`#/cursos/${courseId}`);
-    expect(location).not.toContain(':4321');
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('text/html');
+    expect(await response.text()).toContain('<div id="root"></div>');
   });
 });

@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 2,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:4321',
     trace: 'on-first-retry',
   },
   timeout: 30000,
@@ -21,10 +21,4 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000,
-  },
 });
