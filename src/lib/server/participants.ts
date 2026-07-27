@@ -149,6 +149,56 @@ export async function listParticipants(filters: ParticipantFilters = {}) {
   return result.rows;
 }
 
+/**
+ * Count participants matching the same filter set as `listParticipants`.
+ *
+ * Used by the `GET /api/participants` endpoint to include `total` in the
+ * pagination meta so the SPA can render "Mostrando X de Y" without
+ * second-guessing the page math. Mirrors the `countAuditEvents` /
+ * `listAuditEvents` pairing in `audit.ts`.
+ *
+ * Excludes soft-deleted rows, matching `listParticipants` policy.
+ */
+export async function countParticipants(filters: ParticipantFilters = {}): Promise<number> {
+  const conditions: string[] = ['deleted_at IS NULL'];
+  const values: unknown[] = [];
+
+  const search = filters.search?.trim();
+  const department = filters.department?.trim();
+  const status = filters.status?.trim();
+  const lifecycleState = filters.lifecycleState?.trim() ?? 'all';
+
+  if (search) {
+    values.push(`%${search}%`);
+    const n = values.length;
+    conditions.push(`(full_name ILIKE $${n} OR document_number ILIKE $${n} OR participant_code ILIKE $${n} OR role_function ILIKE $${n} OR education_level ILIKE $${n} OR program ILIKE $${n} OR organization ILIKE $${n} OR phone ILIKE $${n} OR district ILIKE $${n})`);
+  }
+
+  if (department) {
+    values.push(department);
+    conditions.push(`department = $${values.length}`);
+  }
+
+  if (status) {
+    values.push(status);
+    conditions.push(`status = $${values.length}`);
+  }
+
+  if (lifecycleState !== 'all') {
+    values.push(lifecycleState);
+    conditions.push(`lifecycle_state = $${values.length}`);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const result = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM participants ${whereClause}`,
+    values,
+  );
+
+  return Number(result.rows[0]?.count ?? 0);
+}
+
 export async function getParticipantMetrics() {
   const result = await query<{ total: string; today: string; consent: string; email: string; active: string; inactive: string }>(
     `SELECT

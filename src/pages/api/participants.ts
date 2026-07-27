@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getCurrentUser } from '../../lib/server/auth';
 import { ensureDatabase } from '../../lib/server/bootstrap';
 import { canCreateParticipants, canManageParticipants } from '../../lib/server/permissions';
-import { createParticipant, exportParticipantsCsv, listParticipants, setParticipantLifecycle, softDeleteParticipant, updateParticipant, getParticipantById } from '../../lib/server/participants';
+import { createParticipant, exportParticipantsCsv, listParticipants, countParticipants, setParticipantLifecycle, softDeleteParticipant, updateParticipant, getParticipantById } from '../../lib/server/participants';
 import { exportParticipantsXlsx } from '../../lib/server/export';
 import { participantSubmissionSchema } from '../../lib/server/participant-schema';
 
@@ -60,7 +60,14 @@ export const GET: APIRoute = async ({ url, cookies }) => {
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? '50')));
   const offset = (page - 1) * limit;
 
-  const participants = await listParticipants({ search, department, status, lifecycleState, limit });
+  // Run the list + count in parallel. Both share the same filter set so the
+  // SPA can rely on `meta.total` to render "Mostrando X de Y" pagination
+  // without inferring totals from `page * limit` (which only returns the
+  // current page's last index, not the actual total row count).
+  const [participants, total] = await Promise.all([
+    listParticipants({ search, department, status, lifecycleState, limit }),
+    countParticipants({ search, department, status, lifecycleState }),
+  ]);
 
   if (format === 'csv') {
     const csv = exportParticipantsCsv(participants);
@@ -85,7 +92,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 
   return new Response(JSON.stringify({
     data: participants,
-    meta: { page, limit, offset },
+    meta: { page, limit, offset, total },
   }), {
     headers: { 'Content-Type': 'application/json' },
   });
