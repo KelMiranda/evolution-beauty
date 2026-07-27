@@ -104,9 +104,12 @@ export const publicParticipantSubmissionSchema = z.preprocess(
       // `z.coerce.number().int().positive().optional()` chain let NaN slip
       // through to `.int()` and surfaced as a confusing `courseId` error
       // even when the public caller had no intent to send a course id.
+      // `pickNumber` returns 0 when the field is missing from the body,
+      // so we treat 0 as "no course provided" — matching the optional
+      // semantics a public registration wants.
       courseId: z.preprocess(
         (value) => {
-          if (value === undefined || value === null || value === '') return undefined;
+          if (value === undefined || value === null || value === '' || value === 0) return undefined;
           const parsed = typeof value === 'number' ? value : Number(value);
           return Number.isFinite(parsed) ? parsed : value;
         },
@@ -116,13 +119,11 @@ export const publicParticipantSubmissionSchema = z.preprocess(
     })
     .superRefine((data, ctx) => {
       if (data.roleFunction === 'Facilitador') {
-        if (data.courseId === undefined) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['courseId'],
-            message: 'Selecciona el curso que impartirás',
-          });
-        }
+        // `courseId` is optional for everyone: a Facilitador may not have a
+        // specific course in mind yet, and the participant is allowed to
+        // exist without a preferred course. The form still surfaces the
+        // dropdown for Facilitadores (so they can pick one when relevant);
+        // the schema no longer blocks submission when they don't.
         if (!data.program || !data.program.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,

@@ -77,17 +77,24 @@ describe('public participant schema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects Facilitador without courseId', () => {
+  it('accepts Facilitador without courseId (courseId is now optional for everyone)', () => {
     const result = publicParticipantSubmissionSchema.safeParse({
       ...baseValidPayload,
       roleFunction: 'Facilitador',
       program: 'Capacitación',
     });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const courseIssue = result.error.issues.find((issue) => issue.path[0] === 'courseId');
-      expect(courseIssue).toBeDefined();
-      expect(courseIssue?.message).toContain('curso');
+    expect(result.success).toBe(true);
+  });
+
+  it('treats courseId: 0 as undefined (no course provided)', () => {
+    const result = publicParticipantSubmissionSchema.safeParse({
+      ...baseValidPayload,
+      roleFunction: 'Participante',
+      courseId: 0,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.courseId).toBeUndefined();
     }
   });
 
