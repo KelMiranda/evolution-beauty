@@ -13,7 +13,7 @@ export const mockRegistros: Registro[] = [
     fechaNacimiento: '1985-03-15', genero: 'Femenino', pais: 'El Salvador',
     prefijo: '+503', celular: '7123-4567', correo: 'maria.c@email.com',
     direccion: 'Colonia Escalón', distrito: 'San Salvador', departamento: 'San Salvador',
-    municipio: 'San Salvador', entidad: 'ACOES Central', funcion: 'Facilitadora',
+    municipio: 'San Salvador', entidad: 'ACOES Central', funcion: 'Facilitador',
     nivelEducativo: 'Universitario', capacitacion: 'Cosmetología avanzada',
     autorizaDatos: true, observaciones: '', fechaRegistro: '2024-01-15', estado: 'activo',
   },
@@ -31,7 +31,7 @@ export const mockRegistros: Registro[] = [
     fechaNacimiento: '1978-11-05', genero: 'Femenino', pais: 'El Salvador',
     prefijo: '+503', celular: '7345-6789', correo: 'rosa.m@email.com',
     direccion: 'Colonia Centroamérica', distrito: 'San Miguel', departamento: 'San Miguel',
-    municipio: 'San Miguel', entidad: 'ACOES San Miguel', funcion: 'Facilitadora',
+    municipio: 'San Miguel', entidad: 'ACOES San Miguel', funcion: 'Facilitador',
     nivelEducativo: 'Técnico', capacitacion: 'Manicure y pedicure',
     autorizaDatos: true, observaciones: '', fechaRegistro: '2024-02-01', estado: 'activo',
   },
@@ -67,7 +67,7 @@ export const mockRegistros: Registro[] = [
     fechaNacimiento: '1992-12-08', genero: 'Femenino', pais: 'El Salvador',
     prefijo: '+503', celular: '7789-0123', correo: 'diana.h@email.com',
     direccion: 'Colonia Las Palmeras', distrito: 'La Paz', departamento: 'La Paz',
-    municipio: 'Zacatecoluca', entidad: 'ACOES La Paz', funcion: 'Facilitadora',
+    municipio: 'Zacatecoluca', entidad: 'ACOES La Paz', funcion: 'Facilitador',
     nivelEducativo: 'Técnico', capacitacion: 'Peinados y trenzas',
     autorizaDatos: true, observaciones: '', fechaRegistro: '2024-03-10', estado: 'pendiente',
   },
@@ -103,7 +103,7 @@ export const mockRegistros: Registro[] = [
     fechaNacimiento: '1987-02-28', genero: 'Femenino', pais: 'El Salvador',
     prefijo: '+503', celular: '7234-8765', correo: 'andrea.f@email.com',
     direccion: 'Colonia San Carlos', distrito: 'San Vicente', departamento: 'San Vicente',
-    municipio: 'San Vicente', entidad: 'ACOES Oriente', funcion: 'Facilitadora',
+    municipio: 'San Vicente', entidad: 'ACOES Oriente', funcion: 'Facilitador',
     nivelEducativo: 'Técnico', capacitacion: 'Tratamientos capilares',
     autorizaDatos: true, observaciones: '', fechaRegistro: '2024-05-01', estado: 'activo',
   },
@@ -121,7 +121,7 @@ export const mockRegistros: Registro[] = [
     fechaNacimiento: '1983-07-19', genero: 'Femenino', pais: 'El Salvador',
     prefijo: '+503', celular: '7456-6543', correo: 'karla.a@email.com',
     direccion: 'Colonia Ciudad Corazón', distrito: 'Cuscatlán', departamento: 'Cuscatlán',
-    municipio: 'Cojutepeque', entidad: 'ACOES Centro', funcion: 'Facilitadora',
+    municipio: 'Cojutepeque', entidad: 'ACOES Centro', funcion: 'Facilitador',
     nivelEducativo: 'Universitario', capacitacion: 'Cosmetología integral',
     autorizaDatos: true, observaciones: '', fechaRegistro: '2024-05-20', estado: 'activo',
   },
@@ -218,7 +218,14 @@ export const municipiosPorDepartamento: Record<string, string[]> = {
   'Usulután': ['Alegría', 'Berlín', 'California', 'Concepción Batres', 'El Triunfo', 'Ereguayquín', 'Estanzuelas', 'Jiquilisco', 'Jucuapa', 'Jucuarán', 'Mercedes Umaña', 'Nueva Granada', 'Ozatlán', 'Puerto El Triunfo', 'San Agustín', 'San Buenaventura', 'San Dionisio', 'San Francisco Javier', 'Santa Elena', 'Santa María', 'Santiago de María', 'Tecapán', 'Usulután'],
 }
 
-export const funcionesACOES = ['Empleado', 'Facilitadora', 'Participante', 'Otro']
+// PR4 housekeeping: canonicalized to the public two-value option. The admin
+// four-value catalog (`['Empleado', 'Facilitador', 'Participante', 'Otro']`)
+// lives in `src/lib/server/catalogs.ts` (`participantRoleFunctionOptions`)
+// and is the source of truth for the admin path; the SPA mirrors only the
+// public subset here. Historical `Facilitadora` strings remain valid in the
+// database and on the admin surface — the column has no DB CHECK and the
+// admin schema keeps accepting the legacy value.
+export const funcionesACOES = ['Empleado', 'Facilitador', 'Participante', 'Otro']
 
 export const nivelesEducativos = [
   'Sin escolaridad', 'Primaria', 'Secundaria', 'Bachillerato',
