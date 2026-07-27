@@ -3,7 +3,7 @@ import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { getCurso, inscribir, resolvePublicEnrollmentLink } from '@/services/api'
 import { AnimatedSection } from '@/components/AnimatedSection'
 import { FALLBACK_COURSE_IMAGE } from '@/lib/images'
-import { normalizeDui } from '@/lib/dui'
+import { normalizeDui, formatDuiInput } from '@/lib/dui'
 import {
   loadPending,
   matchesPending,
@@ -390,7 +390,7 @@ export function CursoDetallePage() {
                   name="dui"
                   type="text"
                   value={formData.dui}
-                  onChange={e => setFormData(p => ({ ...p, dui: e.target.value }))}
+                  onChange={e => setFormData(p => ({ ...p, dui: formatDuiInput(e.target.value) }))}
                   className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray focus:outline-none focus:border-gold/50"
                   placeholder="00000000-0"
                   pattern={"\\d{8}-\\d"}

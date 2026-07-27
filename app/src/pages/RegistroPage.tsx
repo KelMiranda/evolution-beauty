@@ -3,7 +3,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Check, ChevronRight, ChevronLeft, CheckCircle2, Info, User, Phone, BookOpen } from 'lucide-react'
 import { createRegistro, getCursos, ValidationApiError } from '@/services/api'
 import { safeRedirect } from '@/lib/safeRedirect'
-import { normalizeDui } from '@/lib/dui'
+import { normalizeDui, formatDuiInput } from '@/lib/dui'
 import { departamentosElSalvador, municipiosPorDepartamento, nivelesEducativos, paisesCentroamerica } from '@/data/mockData'
 import type { Registro } from '@/types'
 
@@ -359,7 +359,7 @@ export function RegistroPage() {
                     <Field
                       label="Documento / DUI"
                       value={form.dui}
-                      onChange={v => updateField('dui', v)}
+                      onChange={v => updateField('dui', formatDuiInput(v))}
                       error={errors.dui}
                       placeholder="00000000-0"
                       pattern={"\\d{8}-\\d"}
