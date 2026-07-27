@@ -72,7 +72,7 @@ export function DashboardPage() {
         {[
           { icon: Users, label: 'Registrados', value: stats?.totalRegistros || 0 },
           { icon: TrendingUp, label: 'Esta semana', value: stats?.registrosSemana || 0 },
-          { icon: GraduationCap, label: 'Facilitadoras', value: stats?.facilitadoras || 0 },
+          { icon: GraduationCap, label: 'Facilitadores', value: stats?.facilitadores || 0 },
           { icon: BookOpen, label: 'Cursos activos', value: stats?.cursosActivos || 0 },
         ].map((stat, i) => (
           <FadeIn key={i} delay={i * 0.08} direction="up" distance={20}>
@@ -228,7 +228,7 @@ export function DashboardPage() {
               </select>
               <select value={filters.funcion} onChange={e => { setFilters(p => ({ ...p, funcion: e.target.value })); setPage(1) }} className="px-3 py-2 bg-charcoal border border-warm-tan/15 rounded-lg text-sm text-ivory">
                 <option value="">Todas las funciones</option>
-                {['Empleado', 'Facilitadora', 'Participante'].map(f => <option key={f} value={f}>{f}</option>)}
+                {['Empleado', 'Facilitador', 'Participante'].map(f => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>
           )}

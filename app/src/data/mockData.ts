@@ -148,7 +148,7 @@ export const mockRegistros: Registro[] = [
 export const mockStats: DashboardStats = {
   totalRegistros: 156,
   registrosSemana: 12,
-  facilitadoras: 43,
+  facilitadores: 43,
   participantes: 98,
   totalCursos: 6,
   cursosActivos: 3,

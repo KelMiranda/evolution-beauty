@@ -205,13 +205,13 @@ export async function getRegistros(params?: {
   if (params?.limit) backendParams.limit = String(params.limit);
 
   const query = new URLSearchParams(backendParams).toString();
-  const response = await api.get<{ data: Participant[]; meta: { page: number; limit: number; offset: number } }>(
+  const response = await api.get<{ data: Participant[]; meta: { page: number; limit: number; offset: number; total: number } }>(
     `/api/participants${query ? `?${query}` : ''}`
   );
 
   return {
     data: response.data.map(mapParticipantToRegistro),
-    total: response.meta.page * response.meta.limit, // This is approximate
+    total: response.meta.total,
   };
 }
 
@@ -582,12 +582,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const registrosSemana = participants.filter(p => new Date(p.created_at) >= weekAgo).length;
-    
-    const facilitadoras = participants.filter(p => p.role_function === 'Facilitadora' || p.role_function === 'facilitadora').length;
+
+    // Canonical role values per PR2 are 'Facilitador' / 'Participante'
+    // (singular, masculine-default). The previous filter checked
+    // 'Facilitadora' / 'facilitadora', which never matched the seeded
+    // data and left the Facilitadores stat at 0. Keep the lowercase
+    // match for safety against historical admin rows that may have
+    // stored the legacy spelling before PR2 normalized the catalog.
+    const facilitadores = participants.filter(p => p.role_function === 'Facilitador' || p.role_function === 'facilitador').length;
     const participantes = participants.filter(p => p.role_function === 'Participante' || p.role_function === 'participante').length;
-    
+
     const cursosActivos = courses.filter(c => c.estado === 'active' || c.estado === 'open').length;
-    
+
     // Group by department
     const porDepartamento: { name: string; value: number }[] = [];
     const deptMap = new Map<string, number>();
@@ -597,7 +603,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       }
     });
     deptMap.forEach((value, name) => porDepartamento.push({ name, value }));
-    
+
     // Group by gender
     const porGenero: { name: string; value: number }[] = [];
     const genderMap = new Map<string, number>();
@@ -607,11 +613,25 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       }
     });
     genderMap.forEach((value, name) => porGenero.push({ name, value }));
-    
+
+    // Build monthly registrations from real data so the chart isn't a
+    // blank grid. Falls back to an empty array when no registrations
+    // have a parseable date, so the chart renders the empty state.
+    const monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'] as const;
+    const monthCounts = new Array<number>(12).fill(0);
+    participants.forEach(p => {
+      const created = new Date(p.created_at);
+      if (!Number.isNaN(created.getTime())) {
+        const m = created.getUTCMonth();
+        monthCounts[m] = (monthCounts[m] ?? 0) + 1;
+      }
+    });
+    const porMes = monthLabels.map((mes, i) => ({ mes, cantidad: monthCounts[i] ?? 0 }));
+
     return {
       totalRegistros: participants.length,
       registrosSemana,
-      facilitadoras,
+      facilitadores,
       participantes,
       totalCursos: courses.length,
       cursosActivos,
@@ -619,15 +639,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       cuposDisponibles: courses.reduce((sum, c) => sum + Math.max(0, c.cupo_maximo - c.inscritos), 0),
       porGenero,
       porDepartamento,
-      porMes: [
-        { mes: 'Ene', cantidad: 0 },
-        { mes: 'Feb', cantidad: 0 },
-        { mes: 'Mar', cantidad: 0 },
-        { mes: 'Abr', cantidad: 0 },
-        { mes: 'May', cantidad: 0 },
-        { mes: 'Jun', cantidad: 0 },
-        { mes: 'Jul', cantidad: 0 },
-      ],
+      porMes,
       cursosPorCategoria: [],
       inscripcionesPorCurso: [],
     };
@@ -636,7 +648,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     return {
       totalRegistros: 0,
       registrosSemana: 0,
-      facilitadoras: 0,
+      facilitadores: 0,
       participantes: 0,
       totalCursos: 0,
       cursosActivos: 0,

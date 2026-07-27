@@ -76,7 +76,14 @@ export interface InscripcionCurso {
 export interface DashboardStats {
   totalRegistros: number
   registrosSemana: number
-  facilitadoras: number
+  /**
+   * Count of participants whose `funcion` is the facilitator role.
+   * Canonical value per PR2 is `Facilitador` (singular, masculine-default).
+   * Historical rows may still carry the legacy `Facilitadora` string —
+   * see `getDashboardStats` in `app/src/services/api.ts` for the
+   * case-insensitive match.
+   */
+  facilitadores: number
   participantes: number
   totalCursos: number
   cursosActivos: number

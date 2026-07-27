@@ -122,7 +122,7 @@ export const handlers = {
           updated_at: '2024-01-01T00:00:00Z',
         },
       ],
-      meta: { page: 1, limit: 20, offset: 0 },
+      meta: { page: 1, limit: 20, offset: 0, total: 1 },
     })
   ),
   courses: http.get('/api/courses', () =>
