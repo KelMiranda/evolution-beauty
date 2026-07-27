@@ -4,60 +4,59 @@
 
 | Service | Port | URL | Role |
 |---|---|---|---|
-| Astro backend | 4321 | http://localhost:4321 | REST API under `/api/*`; redirects non-API paths to the SPA |
-| React SPA | 3000 | http://localhost:3000 | React Router 7 SPA with `HashRouter`; hits the backend via Vite proxy |
+| Astro web server | 4321 | http://localhost:4321 | Serves the React SPA, static assets, and REST API under `/api/*` |
 | PostgreSQL | 5437 | (docker-internal) | Database |
 
-The Astro backend serves both the JSON API and a thin redirect shim. The
-React SPA is the user-facing surface: every page in the app — landing,
-catalog, course detail, registration, login, dashboard — is rendered by
-the SPA. The Vite dev server (port 3000) proxies `/api/*` to the backend
-on 4321, so the SPA code can call `fetch('/api/...')` without CORS
-configuration in development.
+The production-style Docker topology has one web container. Its build first
+compiles the React SPA with Vite, copies the generated files into Astro's
+`public/` directory, and then builds the standalone Astro server. At runtime,
+Astro serves the SPA shell and assets from `dist/client/` alongside the API.
+Unknown non-API GET requests receive the SPA `index.html`; non-API mutation
+requests receive HTTP 405.
+
+For standalone frontend development, the Vite dev server still runs on port
+3000 and proxies `/api/*` to Astro on 4321. This development-only server is not
+a Docker Compose service.
 
 ## Why HashRouter?
 
 The SPA uses `react-router-dom`'s `HashRouter` (`app/src/main.tsx`),
 not `BrowserRouter`. This means SPA URLs include a `#` segment
-(`http://localhost:3000/#/cursos/9`); the path before the `#` is always
+(`http://localhost:4321/#/cursos/9`); the path before the `#` is always
 `/`, and the SPA state lives in the hash.
 
 The tradeoff:
 
-- **Pro**: Public links work without server-side fallback. A URL like
-  `http://localhost:3000/#/cursos/9` is served by the SPA shell
-  regardless of whether the dev/prod server has a route for `/cursos/9`
-  — the browser asks for `/`, gets the SPA HTML, and the SPA reads the
-  hash to figure out the route.
+- **Pro**: Public links work without relying on server path rewriting. A URL
+  like `http://localhost:4321/#/cursos/9` requests `/`, receives the SPA
+  shell, and lets the SPA read the hash to select the route.
 - **Con**: URLs are uglier (`#` in the middle). Server logs lose the
   intent (everything shows up as `GET /`).
 
-If we switched to `BrowserRouter`, the Astro backend would need a
-catch-all route that serves the SPA HTML for every non-`/api/*` path.
-That is a bigger architectural change tracked outside this scope (see
-"Changes tracked outside this scope" below).
+Astro also provides an `index.html` fallback for unknown non-API GET requests.
+That fallback protects direct requests and would support a future migration to
+`BrowserRouter`, but the current client routing contract remains HashRouter.
 
 ## Routing rules
 
 Given `HashRouter`:
 
-- A valid SPA URL is `http://<spa-host>/#/cursos/<id>?token=<token>`.
-- Entering `http://<spa-host>/cursos/<id>` (no `#`) would cause the
-  SPA to fail to match the route and fall back to `NotFoundPage`
-  (`app/src/pages/NotFoundPage.tsx`).
-- Entering `http://<backend-host>/cursos/<id>?token=<token>` triggers
-  the Astro middleware's redirect to the SPA, but the redirect must
-  include the `#` for the SPA to handle the URL correctly. The
-  middleware is the source of truth for that mapping (see
-  `src/middleware.ts`).
+- A valid SPA URL is `http://<web-host>/#/cursos/<id>?token=<token>`.
+- Entering `http://<web-host>/cursos/<id>` (no `#`) returns the SPA shell
+  through the middleware fallback. HashRouter sees `/` because fragments are
+  browser-only, so this malformed URL does not preserve the intended course
+  route.
+- Requests for known static files (`/assets/*`, `/sw.js`, SVGs, and similar)
+  pass through to Astro's static-file handling.
+- Requests under `/api/*` pass through to Astro API routes and retain the
+  development CORS policy for Vite origins on port 3000.
 
 ## Environment variables
 
 | Variable | Default | Where | Purpose |
 |---|---|---|---|
-| `PUBLIC_SITE_URL` | `http://localhost:3000` | `src/pages/api/courses/[id]/public-link.ts` | Used by the public-link endpoint to build the public enrollment URL. **Must point to the SPA**, not the backend — otherwise the link is sent to a non-routable address. |
-| `REACT_APP_URL` | `http://localhost:3000` | `src/middleware.ts` | Used by the Astro middleware to redirect non-API paths to the SPA. |
-| `VITE_API_URL` | `http://localhost:4321` | `app/src/services/api.ts` | Used by the SPA at build time to know where the backend API lives (Vite proxy in dev). |
+| `PUBLIC_SITE_URL` | `http://localhost:4321` | `src/pages/api/courses/[id]/public-link.ts` | Public Astro origin used to build HashRouter enrollment links. |
+| `VITE_API_URL` | `http://localhost:4321` | `app/src/services/api.ts` | Optional build-time API origin for standalone Vite development; relative `/api/*` requests use the Vite proxy. |
 | `VITE_VAPID_PUBLIC_KEY` | `YOUR_VAPID_PUBLIC_KEY` | `app/src/components/NotificationSubscriptionCard.tsx` | Used by the SPA for web-push subscription. |
 
 The local `.env` file is gitignored (`/.gitignore` line 4). A fresh
@@ -106,10 +105,8 @@ person (any browser, no auth)
 
 If the URL the admin receives is followed verbatim (no copy-paste
 mutation), the HashRouter route is preserved and the person lands
-directly on the course detail page. If somebody pastes a malformed
-link — e.g. `http://localhost:4321/cursos/9?token=...` (backend
-origin, no `#`) — the Astro middleware catches it and redirects to
-`http://localhost:3000/#/cursos/9?token=...` (SPA origin with `#`).
+directly on the course detail page. The generated URL and all API calls share
+the same `http://localhost:4321` origin in the Docker setup.
 
 ### Round-trip semantics (sessionStorage bridge)
 
@@ -136,9 +133,9 @@ Failure modes:
   the same course + token the effect retries.
 
 The `acoes:pendingEnrollment` key is tab-bound (per `sessionStorage`
-spec) and same-origin; the Docker setup serves the SPA on
-`http://localhost:3000` and the API on `http://localhost:4321` so the
-round-trip works because both share the `localhost` origin.
+spec) and same-origin. The Docker setup serves both the SPA and API from
+`http://localhost:4321`, so navigation throughout the round-trip keeps the
+same origin.
 
 ### Public form role matrix
 
@@ -275,14 +272,9 @@ logger as `courseId` only.
 
 ## Changes tracked outside this scope
 
-- **Switching to `BrowserRouter`** would require a server-side
-  catch-all in the Astro backend. Out of scope for this fix; tracked
-  as a future architectural change.
-- **The Astro catch-all page removal** was completed in the React SPA
-  migration. The legacy `src/pages/index.astro` no longer exists, so
-  any unmatched path that reaches the backend falls into the
-  middleware redirect and lands on the SPA's `NotFoundPage`.
-- **Production deployment** uses a reverse proxy in front of the
-  Astro backend (see `docs/hardening.md`). The proxy must preserve
-  the `Location` header on 302 responses, otherwise the SPA
-  redirect will not work in production.
+- **Switching to `BrowserRouter`** remains a client-side routing migration. The
+  server fallback now exists, but links, navigation, and tests still use the
+  HashRouter contract.
+- **Production deployment** uses a reverse proxy in front of the unified Astro
+  server (see `docs/hardening.md`). The proxy must route both static SPA
+  requests and `/api/*` to port 4321.
