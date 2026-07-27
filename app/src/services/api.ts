@@ -618,7 +618,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const facilitadores = participants.filter(p => p.role_function === 'Facilitador' || p.role_function === 'facilitador').length;
     const participantes = participants.filter(p => p.role_function === 'Participante' || p.role_function === 'participante').length;
 
-    const cursosActivos = courses.filter(c => c.estado === 'active' || c.estado === 'open').length;
+    // "Cursos activos" = anything currently visible and/or open for enrollment.
+    // Excludes states that mean the course is finished or not yet published.
+    const cursosActivos = courses.filter(c => c.estado !== 'finalizado' && c.estado !== 'proximamente' && c.estado !== 'draft').length;
 
     // Group by department
     const porDepartamento: { name: string; value: number }[] = [];
