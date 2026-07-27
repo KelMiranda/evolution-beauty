@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react'
-import { useParams, Link, useSearchParams } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { getCurso, inscribir, resolvePublicEnrollmentLink } from '@/services/api'
 import { AnimatedSection } from '@/components/AnimatedSection'
 import { FALLBACK_COURSE_IMAGE } from '@/lib/images'
+import { normalizeDui } from '@/lib/dui'
+import {
+  loadPending,
+  matchesPending,
+  savePending,
+  clearPending,
+} from '@/lib/pendingEnrollment'
 import {
   MapPin, Calendar, Clock, Users, ChevronLeft, CheckCircle2,
   User, AlertCircle, Tag
@@ -12,17 +19,22 @@ import type { Curso } from '@/types'
 export function CursoDetallePage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [curso, setCurso] = useState<Curso | null>(null)
   const [facilitadorNombre, setFacilitadorNombre] = useState('')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [formData, setFormData] = useState({ nombre: '', correo: '', telefono: '', dui: '', notas: '' })
+  const [formData, setFormData] = useState({ dui: '' })
   const [formError, setFormError] = useState('')
   const [publicToken, setPublicToken] = useState('')
   const [tokenError, setTokenError] = useState('')
   const [loadError, setLoadError] = useState('')
+
+  // Tracks whether the modal was opened by the auto-enroll path so we don't
+  // double-fire if the effect re-runs.
+  const autoEnrollTriggeredRef = useRef(false)
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -56,23 +68,41 @@ export function CursoDetallePage() {
     }
   }
 
-  const handleInscribir = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError('')
-    if (!formData.nombre.trim() || !formData.correo.trim() || !formData.telefono.trim()) {
-      setFormError('Todos los campos son requeridos')
+  /**
+   * Performs the public enrollment against the backend, persists the
+   * round-trip state if the participant is unknown, and updates the UI.
+   *
+   * - `{ kind: 'enrollment' }` → success state, increment counter.
+   * - `{ kind: 'redirect' }` → store the pending intent and navigate to
+   *   the registration page so the user can complete the round-trip.
+   * - Errors surface in `formError` and leave sessionStorage intact for
+   *   manual retry.
+   */
+  const runEnrollment = async (rawDui: string) => {
+    if (!publicToken) {
+      setFormError('La inscripción pública requiere un enlace válido')
       return
     }
+    const normalized = normalizeDui(rawDui)
+    if (!normalized) {
+      setFormError('DUI inválido (formato 00000000-0)')
+      return
+    }
+
+    setFormError('')
     setSubmitting(true)
     try {
-      await inscribir({
-        cursoId: id!,
-        nombre: formData.nombre,
-        correo: formData.correo,
-        telefono: formData.telefono,
-        dui: formData.dui,
-        notas: formData.notas,
-      }, publicToken || undefined)
+      const result = await inscribir({ cursoId: id!, dui: normalized }, publicToken)
+
+      if (result.kind === 'redirect') {
+        // Persist the round-trip so the user lands back here after registering.
+        savePending({ token: publicToken, dui: normalized, courseId: id! })
+        navigate(result.redirect)
+        return
+      }
+
+      // Enrolled.
+      clearPending()
       setSuccess(true)
       if (curso) {
         setCurso({ ...curso, inscritos: curso.inscritos + 1 })
@@ -83,6 +113,33 @@ export function CursoDetallePage() {
       setSubmitting(false)
     }
   }
+
+  const handleInscribir = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await runEnrollment(formData.dui)
+  }
+
+  // Auto-enroll on mount when a pending round-trip matches this course.
+  // Runs after the modal state settles so React renders the open modal
+  // before firing the network request.
+  useEffect(() => {
+    if (!publicToken || !id) return
+    if (showForm || success) return
+    if (autoEnrollTriggeredRef.current) return
+
+    const pending = loadPending()
+    if (!pending) return
+    if (!matchesPending(pending, id, publicToken)) return
+
+    autoEnrollTriggeredRef.current = true
+    setFormData({ dui: pending.dui })
+    setShowForm(true)
+    // Defer so the modal mounts before the request fires.
+    setTimeout(() => {
+      void runEnrollment(pending.dui)
+    }, 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicToken, id])
 
   if (loading) {
     return (
@@ -307,43 +364,61 @@ export function CursoDetallePage() {
         </div>
       </div>
 
-      {/* Inscription Modal */}
+      {/* Inscription Modal (DUI-only, PR3 contract) */}
       {showForm && !success && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)}>
-          <div className="bg-charcoal-light rounded-2xl max-w-md w-full p-6 border border-warm-tan/20 shadow-glow" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => !submitting && setShowForm(false)}
+          data-testid="curso-detalle-enrollment-modal"
+        >
+          <div
+            className="bg-charcoal-light rounded-2xl max-w-md w-full p-6 border border-warm-tan/20 shadow-glow"
+            onClick={e => e.stopPropagation()}
+          >
             <h3 className="font-display text-2xl text-ivory">Inscripción</h3>
             <p className="text-sm text-warm-gray mt-1">{curso.nombre}</p>
 
             <form onSubmit={handleInscribir} className="mt-6 space-y-4">
               <div>
-                <label className="text-[10px] text-warm-gray uppercase tracking-wider">Nombre completo *</label>
-                <input value={formData.nombre} onChange={e => setFormData(p => ({ ...p, nombre: e.target.value }))} className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray focus:outline-none focus:border-gold/50" placeholder="Tu nombre" />
-              </div>
-              <div>
-                <label className="text-[10px] text-warm-gray uppercase tracking-wider">Correo electrónico *</label>
-                <input type="email" value={formData.correo} onChange={e => setFormData(p => ({ ...p, correo: e.target.value }))} className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray focus:outline-none focus:border-gold/50" placeholder="correo@ejemplo.com" />
-              </div>
-              <div>
-                <label className="text-[10px] text-warm-gray uppercase tracking-wider">Teléfono *</label>
-                <input value={formData.telefono} onChange={e => setFormData(p => ({ ...p, telefono: e.target.value }))} className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray focus:outline-none focus:border-gold/50" placeholder="7000-0000" />
-              </div>
-              <div>
-                <label className="text-[10px] text-warm-gray uppercase tracking-wider">DUI (opcional)</label>
-                <input value={formData.dui} onChange={e => setFormData(p => ({ ...p, dui: e.target.value }))} className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray focus:outline-none focus:border-gold/50" placeholder="00000000-0" />
+                <label className="text-[10px] text-warm-gray uppercase tracking-wider">DUI *</label>
+                <input
+                  name="dui"
+                  type="text"
+                  value={formData.dui}
+                  onChange={e => setFormData(p => ({ ...p, dui: e.target.value }))}
+                  className="mt-1.5 w-full px-4 py-3 bg-charcoal border border-warm-tan/20 rounded-xl text-sm text-ivory placeholder:text-warm-gray focus:outline-none focus:border-gold/50"
+                  placeholder="00000000-0"
+                  pattern={"\\d{8}-\\d"}
+                  inputMode="numeric"
+                  maxLength={10}
+                  required
+                  data-testid="curso-detalle-dui-input"
+                />
+                <p className="mt-1 text-[11px] text-warm-gray">Formato: 8 dígitos, guion, 1 dígito (00000000-0).</p>
               </div>
 
               {formError && (
                 <div className="p-3 bg-error/10 border border-error/20 rounded-lg flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-error flex-shrink-0" />
-                  <p className="text-xs text-error">{formError}</p>
+                  <p className="text-xs text-error" data-testid="curso-detalle-enrollment-error">{formError}</p>
                 </div>
               )}
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-3 border border-warm-tan/20 text-warm-gray text-sm rounded-xl hover:border-warm-tan/40 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  disabled={submitting}
+                  className="flex-1 py-3 border border-warm-tan/20 text-warm-gray text-sm rounded-xl hover:border-warm-tan/40 transition-colors disabled:opacity-50"
+                >
                   Cancelar
                 </button>
-                <button type="submit" disabled={submitting} className="flex-1 py-3 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-colors disabled:opacity-50">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-3 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-colors disabled:opacity-50"
+                  data-testid="curso-detalle-enrollment-submit"
+                >
                   {submitting ? 'Procesando...' : 'Confirmar inscripción'}
                 </button>
               </div>

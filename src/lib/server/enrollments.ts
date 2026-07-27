@@ -25,9 +25,12 @@ export type EnrollmentInput = {
   publicToken?: string;
   participantId?: number;
   enrolledBy?: number;
-  fullName: string;
-  email: string;
-  phone: string;
+  // Legacy identity columns. Optional because the public path derives
+  // them server-side from the participant when `participantId` is
+  // provided (PR3 contract). The admin path still requires them.
+  fullName?: string;
+  email?: string;
+  phone?: string;
   dui?: string;
   notas?: string;
 };
