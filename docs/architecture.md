@@ -85,14 +85,22 @@ person (any browser, no auth)
   │  → SPA loads, HashRouter matches /cursos/:id
   │  → CursoDetallePage reads ?token= from useSearchParams
   │  → resolvePublicEnrollmentLink(token) validates it
-  │  → course loads, "Inscribirme" form is shown
+  │  → course loads, "Inscribirme ahora" CTA is shown
   │
-  │ person fills form
-  │ POST /api/public/participants            (no auth)
-  │  → Zod-validated, createParticipant()
-  │  → returns 201 with participant_code
+  │ person clicks CTA → modal asks for DUI only
+  │ POST /api/public/enrollments              (no auth)
+  │   body: { token, dui }
+  │  → public-enrollments endpoint
+  │    → getCourseByPublicEnrollmentToken(token) → 404 if invalid
+  │    → normalizeDui(dui) → 400 if malformed
+  │    → getParticipantByDocumentNumber(normDui)
+  │       ├─ hit  → createEnrollment(participantId, courseId, token)
+  │       │         → returns 201 { data: <Enrollment> }
+  │       │         → SPA renders the success card
+  │       └─ miss → returns 200 { redirect: '/registro?redirect=%2Fcursos%2F<id>%3Ftoken%3D<token>' }
+  │                  (see "Round-trip semantics" below)
   │
-  │<─ 201 Created
+  │<─ 200 / 201 / 400 / 404 / 409
   ▼
 ```
 
@@ -103,7 +111,36 @@ link — e.g. `http://localhost:4321/cursos/9?token=...` (backend
 origin, no `#`) — the Astro middleware catches it and redirects to
 `http://localhost:3000/#/cursos/9?token=...` (SPA origin with `#`).
 
-### Public form is for participants only
+### Round-trip semantics (sessionStorage bridge)
+
+When the public enrollments endpoint returns `200 { redirect }` (the
+person's DUI is not yet linked to a participant), the SPA persists the
+round-trip intent under `sessionStorage.acoes:pendingEnrollment` as
+`{ dui, courseId, token, ts }` (10-minute TTL), then navigates to the
+encoded `/registro?redirect=%2Fcursos%2F<id>%3Ftoken%3D<token>`
+hash route. The user completes the registration form on
+`RegistroPage`; on success the SPA navigates back to the course
+detail (`navigate(safeRedirect(redirectTarget))`). The auto-enroll
+effect on `CursoDetallePage` reads the matching session entry,
+pre-fills the DUI input, opens the modal, and auto-submits via a
+`setTimeout(0)` so React commits the open modal first. On success
+`sessionStorage.acoes:pendingEnrollment` is cleared.
+
+Failure modes:
+- sessionStorage missing/expired → user lands on the course page and
+  can re-enroll manually.
+- Auto-submit fails (course full, etc.) → modal stays open with the
+  API error for manual retry.
+- User navigates away before the auto-submit fires → the entry
+  remains valid until its 10-minute TTL expires; on the next visit to
+  the same course + token the effect retries.
+
+The `acoes:pendingEnrollment` key is tab-bound (per `sessionStorage`
+spec) and same-origin; the Docker setup serves the SPA on
+`http://localhost:3000` and the API on `http://localhost:4321` so the
+round-trip works because both share the `localhost` origin.
+
+### Public form role matrix
 
 The SPA exposes two distinct public-facing surfaces that both end up
 creating a participant record via `POST /api/public/participants`:
@@ -114,37 +151,66 @@ creating a participant record via `POST /api/public/participants`:
   a course detail page, reached either directly or via the public
   enrollment link above.
 
-Both flows are restricted to the `Participante` audience. In
-particular:
+Both flows are restricted to the public two-value role catalog
+(`Participante` and `Facilitador`). In particular:
 
-- `RegistroPage` no longer exposes a `<select>` for `funcion`. The
-  form hardcodes `funcion: 'Participante'` in its state and always
-  submits that value, regardless of what the user does in the form.
-  A visible banner on every step states that facilitators/facilitators
-  and employees are managed by the admin via the dashboard.
-- `CursoDetallePage` does not have a `funcion` field at all.
-- The `participantPublicSchema` (`src/lib/server/participant-schema.ts`)
-  remains permissive on `role_function` because the admin API can
-  legitimately create records with any role. The frontend is the
-  enforcement point: a public caller cannot pick a non-participant
-  role through the UI.
-- The admin can edit `funcion` on an existing record after the fact
-  via `/dashboard/registros` if the user later becomes a facilitator
-  or employee.
+- `RegistroPage` exposes a `<select>` for `funcion` in step 1 sourced
+  from the public two-value list. The default is empty; the user must
+  pick one before advancing.
+- For `Participante`, the `curso` and `capacitacion` fields are
+  hidden. For `Facilitador`, both fields are required. Toggling back
+  to `Participante` clears any stale facilitator values.
+- `observaciones` is fully removed from the public surface; the wire
+  payload never carries `notes`.
+- `CursoDetallePage` collects only the DUI in the modal; the public
+  enrollments endpoint resolves the participant server-side and
+  rejects payloads that include the legacy five-field shape.
+- The admin four-value catalog (`Empleado`, `Facilitador`,
+  `Participante`, `Otro`) and the historical `Facilitadora` string
+  remain valid on the admin path; the public schema is the only
+  enforcement point for the two-value restriction. See
+  `src/lib/server/public-participant-schema.ts` and
+  `src/lib/server/catalogs.ts` (`PUBLIC_PARTICIPANT_ROLE_OPTIONS`).
+
+### Public schema wire contract
+
+`POST /api/public/participants` accepts a JSON payload validated by
+`publicParticipantSubmissionSchema` (`src/lib/server/public-participant-schema.ts`).
+The schema applies two preprocesses before its field validators run:
+
+1. `phone` synthesis — when the wire payload omits `phone` (or sends
+   `''`), the schema combines `phone_dial_code` + `phone_number` into
+   a single `phone` string. The SPA collects `prefijo` and `celular`
+   as separate fields and never has to build the combined value
+   client-side.
+2. `courseId` tightening — `undefined`, `null`, and `''` short-circuit
+   to `undefined` BEFORE Zod's `.coerce.number()` is evaluated, so
+   Participante payloads no longer surface a misleading
+   `Expected number, received nan` error on `courseId`.
+
+`documentNumber` is normalized through `duiSchema` (canonical
+`00000000-0`, nine-digit dash insertion, whitespace stripping). Any
+non-empty `notes` value is rejected; `notes: ''` is accepted and
+transformed to `undefined` so the route handler never forwards the
+field to the participant.
 
 ## Roles and audiences
 
 | Role          | How they enter the system                                          |
 |---------------|--------------------------------------------------------------------|
-| Participant   | Via the public registration form (`/#/registro`) or the public enrollment link on a course detail page. |
-| Facilitator / Facilitadora | Created and managed by the admin via `/dashboard/registros`. The public form does not offer this role. |
-| Empleado      | Created and managed by the admin via `/dashboard/registros`. The public form does not offer this role. |
+| Participante  | Via the public registration form (`/#/registro`) or the public enrollment link on a course detail page. The public schema restricts `role_function` to this value plus `Facilitador`. |
+| Facilitador   | Via the public registration form (`/#/registro`) by selecting it in step 1's `funcion` select. The form requires `curso` and `capacitacion` for this audience. |
+| Empleado      | Created and managed by the admin via `/dashboard/registros`. The public schema rejects this value; the admin schema keeps it. |
+| Otro          | Created and managed by the admin via `/dashboard/registros`. The public schema rejects this value; the admin schema keeps it. |
 | Admin         | Has full read/write access to all records and dashboards. |
 
 The `Role` type (`app/src/types/index.ts`) and the auth layer treat
-these four as distinct values; the data model (`funcion` column on
-the participant record) is intentionally flexible so that the admin
-can reassign a participant's role later.
+the first four as distinct values; the data model (`funcion` column
+on the participant record) is intentionally flexible so that the
+admin can reassign a participant's role later. Historical
+`Facilitadora` strings stored by the admin path continue to load
+because the column has no DB-level CHECK; the public two-value
+restriction is enforced exclusively by the public Zod schema.
 
 ## Token handling
 
