@@ -3,10 +3,12 @@ import { useDashboard } from '@/hooks/useDashboard'
 import { useRegistros } from '@/hooks/useRegistros'
 import { createCoursePublicLink, downloadParticipantsXlsx, getCourseRecords } from '@/services/api'
 import { FadeIn, CountUp } from '@/components/animations'
+import { splitFacilitadores } from '@/utils/facilitadores'
 import {
   Users, GraduationCap, TrendingUp, BookOpen,
   Search, Download, ChevronLeft, ChevronRight,
-  Filter, Eye, MapPin, Phone, Link as LinkIcon, Copy, RefreshCw, BadgeCheck
+  Filter, Eye, MapPin, Phone, Link as LinkIcon, Copy, RefreshCw, BadgeCheck,
+  UserPlus
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -38,6 +40,17 @@ export function DashboardPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / 10))
   const selectedData = registros.find(r => r.id === selectedRegistro)
+
+  /**
+   * Facilitador split for the dashboard panel — both buckets are filtered
+   * from `registros` via the pure `splitFacilitadores` helper (see
+   * `app/src/utils/facilitadores.ts` for the canonical role filter and
+   * `courseId` truthiness semantics).
+   */
+  const { linked: facilitatorsLinked, unlinked: facilitatorsUnlinked } = splitFacilitadores(registros)
+
+  /** Map of `courseId -> course name` for joining facilitator rows to course titles. */
+  const courseNameById = new Map(courses.map(c => [String(c.id), c.name] as const))
 
   useEffect(() => {
     getCourseRecords({ includeHidden: true }).then(setCourses).catch(() => setCourses([]))
@@ -200,6 +213,115 @@ export function DashboardPage() {
           </div>
         </FadeIn>
       </div>
+
+      {/* Facilitadores — split into linked vs unlinked to a course */}
+      <FadeIn delay={0.12}>
+        <div className="bg-charcoal-light rounded-xl border border-warm-tan/[0.08] overflow-hidden">
+          <div className="p-4 lg:p-5 border-b border-warm-tan/[0.08] flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-display text-lg text-ivory">Facilitadores</h3>
+              <p className="text-[11px] text-warm-gray/50 mt-1">
+                Facilitadores vinculados a un curso y pendientes de asignación.
+                Derivado de los registros con <span className="text-warm-gray/70">funcion = Facilitador</span>.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 border border-gold/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-gold">
+                Vinculados · {facilitatorsLinked.length}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-warm-tan/10 border border-warm-tan/20 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-warm-gray">
+                Sin curso · {facilitatorsUnlinked.length}
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto border-b border-warm-tan/[0.06]">
+            <table className="w-full min-w-[680px]">
+              <thead>
+                <tr className="border-b border-warm-tan/[0.08]">
+                  {['Código', 'Nombre', 'Curso', 'Estado', 'Contacto'].map((h, i) => (
+                    <th key={i} className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {facilitatorsLinked.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-warm-gray/40 text-[11px]">No hay facilitadores vinculados a un curso todavía.</td></tr>
+                ) : facilitatorsLinked.map(r => (
+                  <tr key={r.id} className="border-b border-warm-tan/[0.03] hover:bg-charcoal/30 transition-colors">
+                    <td className="px-4 py-3.5"><span className="font-mono text-[11px] text-gold/70">{r.codigo}</span></td>
+                    <td className="px-4 py-3.5">
+                      <p className="text-sm text-ivory font-medium">{r.nombre}</p>
+                      <p className="text-[11px] text-warm-gray/50">{r.dui}</p>
+                    </td>
+                    <td className="px-4 py-3.5 text-sm text-ivory/80">
+                      {(r.courseId && courseNameById.get(r.courseId)) || <span className="text-warm-gray/40 text-[11px]">Curso no encontrado</span>}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${r.estado === 'activo' ? 'bg-success/10 text-success' : r.estado === 'pendiente' ? 'bg-gold/10 text-gold' : 'bg-warm-tan/10 text-warm-gray'}`}>{r.estado}</span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1 text-[11px] text-warm-gray/50"><Phone className="w-3 h-3" />{r.prefijo} {r.celular}</div>
+                        <div className="text-[11px] text-warm-gray/40">{r.correo}</div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="overflow-x-auto">
+            <div className="px-4 lg:px-5 py-3 border-b border-warm-tan/[0.06] flex items-center justify-between gap-3">
+              <p className="text-[11px] text-warm-gray/60">Facilitadores sin curso</p>
+              <p className="text-[10px] text-warm-gray/40">Acción de asignación disponible — sin efecto todavía.</p>
+            </div>
+            <table className="w-full min-w-[680px]">
+              <thead>
+                <tr className="border-b border-warm-tan/[0.08]">
+                  {['Código', 'Nombre', 'Estado', 'Contacto', 'Acción'].map((h, i) => (
+                    <th key={i} className="text-left px-4 py-3 text-[10px] font-mono tracking-wider uppercase text-warm-gray/50">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {facilitatorsUnlinked.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-warm-gray/40 text-[11px]">No hay facilitadores pendientes de asignación.</td></tr>
+                ) : facilitatorsUnlinked.map(r => (
+                  <tr key={r.id} className="border-b border-warm-tan/[0.03] hover:bg-charcoal/30 transition-colors">
+                    <td className="px-4 py-3.5"><span className="font-mono text-[11px] text-gold/70">{r.codigo}</span></td>
+                    <td className="px-4 py-3.5">
+                      <p className="text-sm text-ivory font-medium">{r.nombre}</p>
+                      <p className="text-[11px] text-warm-gray/50">{r.dui}</p>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${r.estado === 'activo' ? 'bg-success/10 text-success' : r.estado === 'pendiente' ? 'bg-gold/10 text-gold' : 'bg-warm-tan/10 text-warm-gray'}`}>{r.estado}</span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1 text-[11px] text-warm-gray/50"><Phone className="w-3 h-3" />{r.prefijo} {r.celular}</div>
+                        <div className="text-[11px] text-warm-gray/40">{r.correo}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <button
+                        type="button"
+                        disabled
+                        title="Próximamente: asignación de curso desde aquí"
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-warm-tan/15 text-xs text-ivory/70 hover:border-gold/25 hover:text-gold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        Asignar curso
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </FadeIn>
 
       {/* Table */}
       <FadeIn delay={0.15}>
