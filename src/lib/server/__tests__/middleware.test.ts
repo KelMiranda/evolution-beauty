@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { readFileMock } = vi.hoisted(() => ({
+  readFileMock: vi.fn(),
+}));
+
 vi.mock('astro:middleware', () => ({
   defineMiddleware: <T>(fn: T) => fn,
+}));
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock,
 }));
 
 import { onRequest } from '../../../middleware';
@@ -22,89 +29,66 @@ function makeNext(impl: NextFn = (async () => new Response('ok')) as NextFn): Ne
   return vi.fn(impl) as NextFn;
 }
 
-// The middleware's return type is `Response | void` (void when it falls
-// through to `next()`). The test only invokes the redirect branches, so
-// casting to `Response` is safe — a void return would fail the test
-// assertion below.
 async function invokeMiddleware(context: MiddlewareContext, next: NextFn): Promise<Response> {
   return (await onRequest(context, next)) as Response;
 }
 
-describe('Astro middleware — SPA redirect for non-API paths', () => {
+describe('Astro middleware — SPA serving for non-API paths', () => {
   beforeEach(() => {
-    // Reset env override between tests so the default (http://localhost:3000) wins.
-    vi.stubEnv('REACT_APP_URL', '');
+    readFileMock.mockReset();
+    readFileMock.mockResolvedValue('<html><div id="root"></div></html>');
   });
 
-  it('redirects a /cursos/9?token=abc request to the SPA with the hash and search preserved', async () => {
-    const next = makeNext();
+  it('serves the SPA index when Astro returns 404 for a GET request', async () => {
+    const next = makeNext(async () => new Response('Not Found', { status: 404 }));
     const response = await invokeMiddleware(
       makeContext('http://localhost:4321/cursos/9?token=abc'),
       next,
     );
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('http://localhost:3000/#/cursos/9?token=abc');
-    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
+    expect(await response.text()).toContain('id="root"');
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(readFileMock).toHaveBeenCalledTimes(1);
   });
 
-  it('redirects a /cursos/9 request (no token) to the SPA with the hash added', async () => {
-    const next = makeNext();
-    const response = await invokeMiddleware(makeContext('http://localhost:4321/cursos/9'), next);
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('http://localhost:3000/#/cursos/9');
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('redirects the root path / to the SPA root with the hash containing the path', async () => {
-    const next = makeNext();
-    const response = await invokeMiddleware(makeContext('http://localhost:4321/'), next);
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('http://localhost:3000/#/');
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it('does not double-add the hash when the request URL already has a fragment', async () => {
-    const next = makeNext();
-    // Request URL with path + search + fragment: the URL spec treats everything
-    // after the first '#' as the fragment, so the "path" is /cursos/9, the
-    // "search" is ?token=abc, and the "hash" is #extra. The middleware must
-    // forward the URL as-is to the SPA without injecting a second '#'.
+  it('returns Astro static-file responses without reading the SPA index', async () => {
+    const next = makeNext(async () => new Response('bundle', {
+      headers: { 'Content-Type': 'text/javascript' },
+    }));
     const response = await invokeMiddleware(
-      makeContext('http://localhost:4321/cursos/9?token=abc#extra'),
+      makeContext('http://localhost:4321/assets/index.js'),
       next,
     );
 
-    expect(response.status).toBe(302);
-    const location = response.headers.get('location') ?? '';
-    expect(location).toBe('http://localhost:3000/cursos/9?token=abc#extra');
-    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('bundle');
+    expect(readFileMock).not.toHaveBeenCalled();
   });
 
-  it('passes through a URL whose hash is already in SPA route form', async () => {
+  it('preserves Astro 404 when the SPA index is unavailable', async () => {
+    readFileMock.mockRejectedValue(new Error('index missing'));
+    const next = makeNext(async () => new Response('Not Found', { status: 404 }));
+    const response = await invokeMiddleware(makeContext('http://localhost:4321/missing'), next);
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe('Not Found');
+  });
+
+  it('returns 405 for non-GET requests outside the API', async () => {
     const next = makeNext();
     const response = await invokeMiddleware(
-      makeContext('http://localhost:4321/#/cursos/9?token=abc'),
+      makeContext('http://localhost:4321/cursos/9', { method: 'DELETE' }),
       next,
     );
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('http://localhost:3000/#/cursos/9?token=abc');
+    expect(response.status).toBe(405);
+    expect(response.headers.get('Allow')).toBe('GET');
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('uses REACT_APP_URL when set instead of the default localhost origin', async () => {
-    vi.stubEnv('REACT_APP_URL', 'https://cursos.example.com');
-    const next = makeNext();
-    const response = await invokeMiddleware(makeContext('http://localhost:4321/cursos/9'), next);
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('https://cursos.example.com/#/cursos/9');
-  });
-
-  it('does NOT redirect /api paths and forwards them to next()', async () => {
+  it('passes API requests through to Astro', async () => {
     const next = makeNext();
     const response = await invokeMiddleware(makeContext('http://localhost:4321/api/courses'), next);
 
@@ -115,14 +99,13 @@ describe('Astro middleware — SPA redirect for non-API paths', () => {
 });
 
 describe('Astro middleware — CORS for the React dev server', () => {
-  beforeEach(() => {
-    vi.stubEnv('REACT_APP_URL', '');
-  });
-
-  it('responds to OPTIONS preflight from the SPA origin with CORS headers', async () => {
+  it('responds to API preflight from an allowed development origin', async () => {
     const next = makeNext();
     const response = await invokeMiddleware(
-      makeContext('http://localhost:4321/api/courses', { method: 'OPTIONS', origin: 'http://localhost:3000' }),
+      makeContext('http://localhost:4321/api/courses', {
+        method: 'OPTIONS',
+        origin: 'http://localhost:3000',
+      }),
       next,
     );
 
@@ -133,31 +116,34 @@ describe('Astro middleware — CORS for the React dev server', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('does not set CORS allow-origin on OPTIONS from a non-SPA origin', async () => {
-    const next = makeNext();
+  it('does not allow an unknown origin on API preflight', async () => {
     const response = await invokeMiddleware(
-      makeContext('http://localhost:4321/api/courses', { method: 'OPTIONS', origin: 'https://evil.example.com' }),
-      next,
+      makeContext('http://localhost:4321/api/courses', {
+        method: 'OPTIONS',
+        origin: 'https://evil.example.com',
+      }),
+      makeNext(),
     );
 
     expect(response.status).toBe(204);
     expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
 
-  it('adds CORS headers to the downstream response when the SPA origin sent the request', async () => {
-    const next = makeNext(async () => new Response('ok'));
+  it('adds CORS headers to API responses for an allowed development origin', async () => {
     const response = await invokeMiddleware(
-      makeContext('http://localhost:4321/api/courses', { origin: 'http://localhost:3000' }),
-      next,
+      makeContext('http://localhost:4321/api/courses', { origin: 'http://127.0.0.1:3000' }),
+      makeNext(async () => new Response('ok')),
     );
 
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:3000');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('http://127.0.0.1:3000');
     expect(response.headers.get('Access-Control-Allow-Credentials')).toBe('true');
   });
 
   it('does not add CORS headers when the origin is missing or unknown', async () => {
-    const next = makeNext(async () => new Response('ok'));
-    const response = await invokeMiddleware(makeContext('http://localhost:4321/api/courses'), next);
+    const response = await invokeMiddleware(
+      makeContext('http://localhost:4321/api/courses'),
+      makeNext(async () => new Response('ok')),
+    );
 
     expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
