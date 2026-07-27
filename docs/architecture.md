@@ -212,6 +212,47 @@ admin can reassign a participant's role later. Historical
 because the column has no DB-level CHECK; the public two-value
 restriction is enforced exclusively by the public Zod schema.
 
+## Dashboard panels (admin-only)
+
+`app/src/pages/DashboardPage.tsx` renders, top to bottom:
+
+1. **Stats row** — four cards. `Registrados`, `Esta semana`,
+   `Facilitadores`, `Cursos activos`. Counts come from
+   `useDashboard()` → `getDashboardStats()` (in `app/src/services/api.ts`).
+2. **Course-links panel** — `getCourseRecords()` + per-row public-link
+   generation. Admin-only.
+3. **Charts row** — `Registros por mes` (bar) and `Por género` (pie).
+   Buckets are computed client-side from the participant payload; no
+   extra endpoint required.
+4. **Facilitadores** — two sub-tables split via `splitFacilitadores()`
+   in `app/src/utils/facilitadores.ts`:
+   - **Vinculados a un curso**: `funcion === 'Facilitador' && course_id IS NOT NULL`.
+     Renders the joined course name from a `Map<courseId, name>` built
+     from the same `courses` array used by the course-links panel.
+   - **Sin curso**: `funcion === 'Facilitador' && course_id IS NULL`.
+     Includes an "Asignar curso" button (intentionally `disabled`,
+     pending a later assignment UX).
+   Both buckets derive from the `registros` array already loaded by
+   `useRegistros`, so the panel cost is zero extra round-trips.
+5. **Equipo** — admin + empleado users loaded via `useUsers()` →
+   `getEquipoUsers()` (which filters `/api/users` client-side).
+   Columns: Correo, Nombre, Rol (pill), Estado (pill), Permisos.
+   Policy copy per role is hardcoded in `app/src/utils/equipo.ts`
+   (`EQUIPO_POLICIES`) rather than fetched from the backend — the
+   taxonomy is two roles and policy copy is reviewed manually, so a
+   copy change does not require a coordinated SPA + backend deploy.
+6. **Registros table** — paginated list with search + filters. The
+   pagination footer relies on `meta.total` returned by
+   `GET /api/participants` (see `countParticipants()` in
+   `src/lib/server/participants.ts` and the `Promise.all([list, count])`
+   call in `src/pages/api/participants.ts`).
+7. **Detail modal** — opens when a Registros row's eye icon is
+   clicked.
+
+The Facilitadores and Equipo panels are intentionally admin-internal
+and not covered by the public-facing OpenSpec specs — they don't shape
+the public enrollment / registration contracts.
+
 ## Token handling
 
 `generateCourseEnrollmentToken(courseId, instructor)` returns a
