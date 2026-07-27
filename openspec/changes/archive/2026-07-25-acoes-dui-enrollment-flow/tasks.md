@@ -237,7 +237,7 @@ Revert the redirect/client-DUI wiring while retaining the role form; the form re
 
 ### Verification
 - [x] Run `(cd app && npm run test:unit -- tests/unit/registro-conditional-fields.test.tsx tests/unit/registro-redirect.test.tsx)`.
-- [ ] Run `(cd app && npm run test:e2e -- tests/e2e/public-registration-funcion.spec.ts)` against the seeded PostgreSQL stack. (PR4)
+- [x] Run `(cd app && npm run test:e2e -- tests/e2e/public-registration-funcion.spec.ts)` against the seeded PostgreSQL stack. (PR4)
 
 ### Rollback
 Revert the replacement tests and deletion; production behavior from tasks 2.1–2.3 remains independently reversible.
@@ -263,8 +263,8 @@ Revert the replacement tests and deletion; production behavior from tasks 2.1–
 3. Preserve existing 404/400/409/500 response semantics and reject the superseded five-field public payload.
 
 ### Verification
-- [ ] Run `npm test -- --run src/lib/server/__tests__/public-enrollment.test.ts`.
-- [ ] Exercise the endpoint with valid, missing, malformed, and mismatched inputs and inspect status/body plus database row count.
+- [x] Run `npm test -- --run src/lib/server/__tests__/public-enrollment.test.ts`.
+- [x] Exercise the endpoint with valid, missing, malformed, and mismatched inputs and inspect status/body plus database row count.
 
 ### Rollback
 Revert the public endpoint/schema commit; PR1’s participant FK and service remain available for a later compatible endpoint implementation.
@@ -286,8 +286,8 @@ Revert the public endpoint/schema commit; PR1’s participant FK and service rem
 3. Handle endpoint errors without treating a redirect response as a successful enrollment.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:unit -- tests/unit/curso-detalle-enrollment.test.tsx)` after the focused suite exists.
-- [ ] Inspect the rendered modal and assert exactly one user-editable field, no legacy identity fields, and the course title.
+- [x] Run `(cd app && npm run test:unit -- tests/unit/curso-detalle-enrollment.test.tsx)` after the focused suite exists.
+- [x] Inspect the rendered modal and assert exactly one user-editable field, no legacy identity fields, and the course title.
 
 ### Rollback
 Revert the modal-only commit to restore the old five-field UI without changing the backend endpoint contract.
@@ -311,8 +311,8 @@ Revert the modal-only commit to restore the old five-field UI without changing t
 3. Treat missing, malformed, expired, or mismatched entries as no pending flow and clear consumed state.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:unit -- tests/unit/pending-enrollment.test.ts)`.
-- [ ] Manually submit an unknown DUI and verify the encoded registration URL plus the exact sessionStorage key/value shape.
+- [x] Run `(cd app && npm run test:unit -- tests/unit/pending-enrollment.test.ts)`.
+- [x] Manually submit an unknown DUI and verify the encoded registration URL plus the exact sessionStorage key/value shape.
 
 ### Rollback
 Revert the storage helper and bridge wiring; unknown DUI responses still display an error until the prior registration flow is restored.
@@ -335,8 +335,8 @@ Revert the storage helper and bridge wiring; unknown DUI responses still display
 3. Avoid a synthesized submit event where a direct enrollment function can share validation and loading state.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:unit -- tests/unit/curso-detalle-enrollment.test.tsx)`.
-- [ ] Assert a seeded pending entry causes one request with the stored DUI and a successful enrollment state without a second click.
+- [x] Run `(cd app && npm run test:unit -- tests/unit/curso-detalle-enrollment.test.tsx)`.
+- [x] Assert a seeded pending entry causes one request with the stored DUI and a successful enrollment state without a second click.
 
 ### Rollback
 Revert only the auto-retry effect; the modal remains available for manual DUI submission and redirect storage remains independently revertible.
@@ -359,8 +359,8 @@ Revert only the auto-retry effect; the modal remains available for manual DUI su
 3. Seed a participant and assert dashless nine-digit DUI matches; assert invalid/mismatched token performs no lookup or insert.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:e2e -- tests/e2e/public-enrollment-roundtrip.spec.ts tests/e2e/public-enrollment-link.spec.ts)` against PostgreSQL.
-- [ ] Confirm tests use deterministic unique DUIs and clean their participant/enrollment rows.
+- [x] Run `(cd app && npm run test:e2e -- tests/e2e/public-enrollment-roundtrip.spec.ts tests/e2e/public-enrollment-link.spec.ts)` against PostgreSQL.
+- [x] Confirm tests use deterministic unique DUIs and clean their participant/enrollment rows.
 
 ### Rollback
 Revert only the new/extended E2E files; production round-trip behavior remains controlled by tasks 3.1–3.4.
@@ -383,8 +383,8 @@ Revert only the new/extended E2E files; production round-trip behavior remains c
 3. Record the response-contract boundary so PR4 can promote it to the final exported discriminated union without behavior changes.
 
 ### Verification
-- [ ] Run `npm test` and `npm run build` at the repository root.
-- [ ] Run `(cd app && npm run test:unit && npm run build)` and the PR3 Playwright suite.
+- [x] Run `npm test` and `npm run build` at the repository root.
+- [x] Run `(cd app && npm run test:unit && npm run build)` and the PR3 Playwright suite.
 
 ### Rollback
 Revert the client contract adaptation with the PR3 slice; server rollback is task 3.1 and modal rollback is task 3.2.
@@ -409,8 +409,8 @@ Revert the client contract adaptation with the PR3 slice; server rollback is tas
 2. Keep admin list/detail and legacy denormalized fields intact; do not remove compatibility columns or admin payloads.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:unit && npm run build)`.
-- [ ] Add a compile-time/unit assertion that redirect responses cannot reach enrollment-success rendering.
+- [x] Run `(cd app && npm run test:unit && npm run build)`.
+- [x] Add a compile-time/unit assertion that redirect responses cannot reach enrollment-success rendering.
 
 ### Rollback
 Revert the type-only/service-boundary commit; retain the runtime branch introduced in PR3.
@@ -433,8 +433,8 @@ Revert the type-only/service-boundary commit; retain the runtime branch introduc
 3. Run all registration E2E suites together against clean test data.
 
 ### Verification
-- [ ] Run `(cd app && npm run test:e2e -- tests/e2e/public-registration.spec.ts tests/e2e/public-registration-funcion.spec.ts)`.
-- [ ] Confirm no public test selects `Empleado`, `Otro`, or historical `Facilitadora`.
+- [x] Run `(cd app && npm run test:e2e -- tests/e2e/public-registration.spec.ts tests/e2e/public-registration-funcion.spec.ts)`.
+- [x] Confirm no public test selects `Empleado`, `Otro`, or historical `Facilitadora`.
 
 ### Rollback
 Revert fixture and test cleanup only; it changes no runtime behavior.
@@ -458,8 +458,8 @@ Revert fixture and test cleanup only; it changes no runtime behavior.
 3. Keep admin `Empleado`, `Otro`, and historical `Facilitadora` role creation covered separately from public role rejection, and assert the database accepts those values.
 
 ### Verification
-- [ ] Run the focused backend bootstrap tests and both admin Playwright specs.
-- [ ] Inspect the database after cascade and assert zero linked rows and no NOT NULL/FK violations.
+- [x] Run the focused backend bootstrap tests and both admin Playwright specs.
+- [x] Inspect the database after cascade and assert zero linked rows and no NOT NULL/FK violations.
 
 ### Rollback
 Revert the regression-test commit; no production schema or API behavior changes are included in this task.
@@ -480,8 +480,8 @@ Revert the regression-test commit; no production schema or API behavior changes 
 2. Document token-first lookup, unknown-DUI registration redirect, ten-minute pending state, linked enrollment, preserved legacy columns, and parked risks.
 
 ### Verification
-- [ ] Review the documented URLs against `/#/registro?redirect=...` and `/#/cursos/<id>?token=...` behavior.
-- [ ] Run the final root/app builds and all unit tests after documentation changes.
+- [x] Review the documented URLs against `/#/registro?redirect=...` and `/#/cursos/<id>?token=...` behavior.
+- [x] Run the final root/app builds and all unit tests after documentation changes.
 
 ### Rollback
 Revert the documentation commit; implementation and test behavior are unaffected.

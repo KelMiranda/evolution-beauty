@@ -5,10 +5,11 @@ This repository tracks specs and proposed changes under `openspec/`.
 ## Archived changes
 
 - `acoes-post-migration-hardening/` (archived 2026-07-25) — recortado that fixed five critical defects left by the React SPA migration: canonical role enforcement, public participant validation, notification audience isolation, broken CI, and missing OpenSpec scaffolding. Synced to `openspec/specs/{auth-and-route-protection,public-participant-validation,notification-audience-isolation,ci-and-component-tests,openspec-scaffolding}/spec.md`. Verdict: APPROVED_WITH_WARNINGS. Full audit trail in `openspec/changes/archive/2026-07-25-acoes-post-migration-hardening/`.
+- `acoes-dui-enrollment-flow/` (archived 2026-07-25) — 4 chained PRs that replaced the participant-only, five-field enrollment flow with a role-aware public registration (Participante / Facilitador) and a DUI-lookup public enrollment backed by a real participant FK. Synced to `openspec/specs/{public-registration-enum-funcion,conditional-form-fields-by-funcion,redirect-after-registration,public-enrollment-by-dui,enrollments-participant-fk,dui-format-validation}/spec.md`. Verdict: APPROVED_WITH_WARNINGS (57/57 spec scenarios PASS; 2 documented design deviations: shared-type `observaciones: ''` plumbing, and the admin four-value `funcionesACOES` mock catalog). Full audit trail in `openspec/changes/archive/2026-07-25-acoes-dui-enrollment-flow/`.
 
 ## Active changes
 
-None. The recortado is the most recent change; the three changes below remain parked.
+None. The `acoes-dui-enrollment-flow` change is the most recently archived; the three changes below remain parked.
 
 ## Parked changes (unarchived — intentionally)
 
@@ -23,5 +24,5 @@ The archived recortado change `acoes-post-migration-hardening/` removed the imme
 ## Layout
 
 - `config.yaml` — OpenSpec project config (schema + context).
-- `specs/` — source of truth. Contains `_stub/` plus the five new capabilities from the archived recortado: `auth-and-route-protection`, `public-participant-validation`, `notification-audience-isolation`, `ci-and-component-tests`, `openspec-scaffolding`.
-- `changes/` — proposed changes. Archive-ready changes are moved to `changes/archive/YYYY-MM-DD-<change-name>/`. The archived `acoes-post-migration-hardening` recortado lives there.
+- `specs/` — source of truth. Contains `_stub/` plus the eleven new capabilities from the two archived changes: `auth-and-route-protection`, `public-participant-validation`, `notification-audience-isolation`, `ci-and-component-tests`, `openspec-scaffolding` (recortado) and `public-registration-enum-funcion`, `conditional-form-fields-by-funcion`, `redirect-after-registration`, `public-enrollment-by-dui`, `enrollments-participant-fk`, `dui-format-validation` (DUI-based enrollment flow).
+- `changes/` — proposed changes. Archive-ready changes are moved to `changes/archive/YYYY-MM-DD-<change-name>/`. The archived `acoes-post-migration-hardening` recortado and `acoes-dui-enrollment-flow` change live there.
