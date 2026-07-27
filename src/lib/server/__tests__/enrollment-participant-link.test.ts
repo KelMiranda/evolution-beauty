@@ -159,34 +159,40 @@ describe('POST /api/public/enrollments — DUI lookup', () => {
     getCourseByPublicEnrollmentTokenMock.mockResolvedValue(fakeCourse);
   });
 
-  it('returns 404 when no participant matches the DUI', async () => {
+  it('returns 200 with the encoded registration redirect when no participant matches the DUI', async () => {
     getParticipantByDocumentNumberMock.mockResolvedValue(null);
 
     const response = await publicPost({
-      request: makeRequest({
-        token: 'tok-9-abc',
-        fullName: 'Ana',
-        email: 'ana@example.com',
-        phone: '+503 7000-0000',
-        dui: '12345678-9',
-      }),
+      request: makeRequest({ token: 'tok-9-abc', dui: '12345678-9' }),
     } as Parameters<typeof publicPost>[0]);
 
-    expect(response.status).toBe(404);
-    const body = (await response.json()) as { error: string };
-    expect(body.error).toContain('No encontramos');
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { redirect?: string };
+    expect(body.redirect).toBe(
+      `/registro?redirect=${encodeURIComponent('/cursos/9?token=tok-9-abc')}`,
+    );
+    expect(createEnrollmentMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 200 with redirect when the DUI is supplied without a dash', async () => {
+    getParticipantByDocumentNumberMock.mockResolvedValue(null);
+
+    const response = await publicPost({
+      request: makeRequest({ token: 'tok-9-abc', dui: '123456789' }),
+    } as Parameters<typeof publicPost>[0]);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { redirect?: string };
+    expect(body.redirect).toBe(
+      `/registro?redirect=${encodeURIComponent('/cursos/9?token=tok-9-abc')}`,
+    );
+    expect(normalizeDuiMock).toHaveBeenCalled();
     expect(createEnrollmentMock).not.toHaveBeenCalled();
   });
 
   it('returns 400 when the DUI is malformed', async () => {
     const response = await publicPost({
-      request: makeRequest({
-        token: 'tok-9-abc',
-        fullName: 'Ana',
-        email: 'ana@example.com',
-        phone: '+503 7000-0000',
-        dui: '1234',
-      }),
+      request: makeRequest({ token: 'tok-9-abc', dui: '1234' }),
     } as Parameters<typeof publicPost>[0]);
 
     expect(response.status).toBe(400);
@@ -197,13 +203,7 @@ describe('POST /api/public/enrollments — DUI lookup', () => {
     getCourseByPublicEnrollmentTokenMock.mockResolvedValue(null);
 
     const response = await publicPost({
-      request: makeRequest({
-        token: '',
-        fullName: 'Ana',
-        email: 'ana@example.com',
-        phone: '+503 7000-0000',
-        dui: '12345678-9',
-      }),
+      request: makeRequest({ token: '', dui: '12345678-9' }),
     } as Parameters<typeof publicPost>[0]);
 
     expect(response.status).toBe(404);
@@ -215,18 +215,17 @@ describe('POST /api/public/enrollments — DUI lookup', () => {
     createEnrollmentMock.mockResolvedValue({ id: 5, participant_id: 99 });
 
     const response = await publicPost({
-      request: makeRequest({
-        token: 'tok-9-abc',
-        fullName: 'Ana',
-        email: 'ana@example.com',
-        phone: '+503 7000-0000',
-        dui: '12345678-9',
-      }),
+      request: makeRequest({ token: 'tok-9-abc', dui: '12345678-9' }),
     } as Parameters<typeof publicPost>[0]);
 
     expect(response.status).toBe(201);
-    const call = createEnrollmentMock.mock.calls[0]?.[0] as { participantId: number; publicToken: string };
+    const call = createEnrollmentMock.mock.calls[0]?.[0] as { participantId: number; publicToken: string; fullName?: string; email?: string; phone?: string };
     expect(call.participantId).toBe(99);
     expect(call.publicToken).toBe('tok-9-abc');
+    // PR3 contract: the public path no longer carries the legacy identity
+    // fields; createEnrollment derives them server-side from the participant.
+    expect(call.fullName).toBeUndefined();
+    expect(call.email).toBeUndefined();
+    expect(call.phone).toBeUndefined();
   });
 });
