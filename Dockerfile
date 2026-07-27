@@ -3,6 +3,8 @@ WORKDIR /app
 
 FROM base AS spa-build
 WORKDIR /spa
+ARG VITE_TURNSTILE_SITEKEY=
+ENV VITE_TURNSTILE_SITEKEY=$VITE_TURNSTILE_SITEKEY
 COPY app/package*.json ./
 RUN npm ci
 COPY app/ .

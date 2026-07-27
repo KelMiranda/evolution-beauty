@@ -17,7 +17,10 @@ services:
       retries: 5
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_TURNSTILE_SITEKEY: ${VITE_TURNSTILE_SITEKEY:-}
     restart: unless-stopped
     env_file:
       - .env
@@ -28,6 +31,7 @@ services:
       PORT: 4321
       HOST: 0.0.0.0
       PUBLIC_SITE_URL: http://localhost:4321
+      VITE_TURNSTILE_SITEKEY: ${VITE_TURNSTILE_SITEKEY:-}
       INITIAL_ADMIN_EMAIL: admin@acoes.local
       INITIAL_ADMIN_PASSWORD: Admin1234!
     ports:
