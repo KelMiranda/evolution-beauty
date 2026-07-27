@@ -59,9 +59,9 @@ export const POST: APIRoute = async ({ params, cookies }) => {
   }
 
   // The SPA uses HashRouter (see app/src/main.tsx), so the route must live
-  // after the '#' fragment. The base URL is the SPA's user-facing origin,
-  // NOT the backend — see docs/architecture.md for rationale.
-  const spaBase = (process.env.PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+  // after the '#' fragment. Astro serves both the SPA and API on the same
+  // public origin; PUBLIC_SITE_URL allows deployments to override that origin.
+  const spaBase = (process.env.PUBLIC_SITE_URL ?? 'http://localhost:4321').replace(/\/+$/, '');
   const search = new URLSearchParams({ token: publicToken });
   const publicUrl = `${spaBase}/#/cursos/${course.id}?${search.toString()}`;
 

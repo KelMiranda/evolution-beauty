@@ -66,7 +66,7 @@ const context = { cookies: {}, params: { id: '9' } } as unknown as Parameters<ty
 
 describe('POST /api/courses/[id]/public-link', () => {
   beforeEach(() => {
-    process.env.PUBLIC_SITE_URL = 'http://localhost:3000';
+    delete process.env.PUBLIC_SITE_URL;
     getCurrentUserMock.mockReset();
     canViewCoursesMock.mockReset();
     getCourseByIdMock.mockReset();
@@ -87,20 +87,20 @@ describe('POST /api/courses/[id]/public-link', () => {
     expect(body.data.token).toBe('9-maria-elena-menjivar-abc12345');
     expect(body.data.publicUrl).toContain('#/cursos/9');
     expect(body.data.publicUrl).toContain('?token=9-maria-elena-menjivar-abc12345');
-    expect(body.data.publicUrl).not.toContain('4321');
+    expect(body.data.publicUrl).toContain(':4321');
   });
 
-  it('starts with the SPA origin, not the backend', async () => {
+  it('starts with the unified Astro origin', async () => {
     const response = await POST(context);
     const body = (await response.json()) as { data: { publicUrl: string } };
-    expect(body.data.publicUrl.startsWith('http://localhost:3000/')).toBe(true);
+    expect(body.data.publicUrl.startsWith('http://localhost:4321/')).toBe(true);
   });
 
-  it('returns a parseable URL whose origin matches the SPA base', async () => {
+  it('returns a parseable URL whose origin matches the public site base', async () => {
     const response = await POST(context);
     const body = (await response.json()) as { data: { publicUrl: string } };
     const parsed = new URL(body.data.publicUrl);
-    expect(parsed.origin).toBe('http://localhost:3000');
+    expect(parsed.origin).toBe('http://localhost:4321');
     expect(parsed.pathname).toBe('/');
     expect(parsed.hash).toBe('#/cursos/9?token=9-maria-elena-menjivar-abc12345');
   });
