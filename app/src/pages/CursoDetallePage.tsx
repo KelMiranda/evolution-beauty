@@ -323,13 +323,18 @@ export function CursoDetallePage() {
                   </div>
 
                   {/* CTA */}
-                  {puedeInscribirse && !success && !tokenError && (
+                  {puedeInscribirse && publicToken && !success && !tokenError && (
                     <button
                       onClick={() => setShowForm(true)}
                       className="w-full py-3.5 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-all"
                     >
                       Inscribirme ahora
                     </button>
+                  )}
+                  {puedeInscribirse && !publicToken && !success && !tokenError && (
+                    <div className="w-full py-3.5 bg-warm-tan/10 text-warm-gray text-sm font-medium rounded-xl text-center border border-warm-tan/20">
+                      Necesitás un link público para inscribirte. Pedile el enlace al administrador del curso.
+                    </div>
                   )}
                   {tokenError && (
                     <div className="w-full py-3.5 bg-error/10 text-error text-sm font-medium rounded-xl text-center border border-error/20">
