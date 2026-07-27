@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
@@ -99,6 +99,11 @@ function findSelectByName(name: string): HTMLSelectElement | undefined {
 }
 
 describe('RegistroPage role matrix', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    delete window.turnstile;
+  });
+
   beforeEach(() => {
     lastCreatePayload = null;
     server.use(
@@ -289,6 +294,50 @@ describe('RegistroPage role matrix', () => {
       // "no value" invariant; the backend's public schema (PR1) treats it as
       // a no-op so no observations-style data leaks into the participant row.
       expect(lastCreatePayload?.program).toBe('');
+    });
+  });
+
+  describe('Turnstile verification', () => {
+    it('blocks submission until the configured widget returns a token', async () => {
+      vi.stubEnv('VITE_TURNSTILE_SITEKEY', 'test-site-key');
+      window.turnstile = {
+        render: vi.fn(() => 'widget-id'),
+        reset: vi.fn(),
+        remove: vi.fn(),
+      };
+      renderRegistro();
+      const user = userEvent.setup();
+
+      await fillStep1(user, { funcion: 'Participante' });
+      await fillStep2(user);
+      await fillStep3ParticipanteAndSubmit(user);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Por favor completá la verificación de seguridad');
+      expect(lastCreatePayload).toBeNull();
+    });
+
+    it('submits the token returned by the configured widget', async () => {
+      vi.stubEnv('VITE_TURNSTILE_SITEKEY', 'test-site-key');
+      let resolveToken: ((token: string) => void) | undefined;
+      window.turnstile = {
+        render: vi.fn((_container, options) => {
+          resolveToken = options.callback;
+          return 'widget-id';
+        }),
+        reset: vi.fn(),
+        remove: vi.fn(),
+      };
+      renderRegistro();
+      const user = userEvent.setup();
+
+      await fillStep1(user, { funcion: 'Participante' });
+      await fillStep2(user);
+      await waitFor(() => expect(resolveToken).toBeDefined());
+      act(() => resolveToken?.('verified-token'));
+      await fillStep3ParticipanteAndSubmit(user);
+
+      await waitFor(() => expect(lastCreatePayload).not.toBeNull());
+      expect(lastCreatePayload?.turnstileToken).toBe('verified-token');
     });
   });
 

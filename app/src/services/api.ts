@@ -275,7 +275,9 @@ export async function getRegistro(id: string): Promise<Registro> {
   return mapParticipantToRegistro(response.data);
 }
 
-export async function createRegistro(data: Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado'>): Promise<Registro> {
+export async function createRegistro(
+  data: Omit<Registro, 'id' | 'codigo' | 'fechaRegistro' | 'estado'> & { turnstileToken?: string },
+): Promise<Registro> {
   // Map Registro to our backend Participant format. The public schema
   // (`publicParticipantSubmissionSchema`) preprocesses the wire payload
   // and synthesizes a combined `phone` value from `phone_dial_code` +
@@ -302,6 +304,7 @@ export async function createRegistro(data: Omit<Registro, 'id' | 'codigo' | 'fec
     program: data.capacitacion,
     consent: data.autorizaDatos,
     notes: data.observaciones,
+    turnstileToken: data.turnstileToken,
   };
 
   const response = await api.post<{ data: Participant }>('/api/public/participants', backendData);

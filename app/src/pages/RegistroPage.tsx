@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Check, ChevronRight, ChevronLeft, CheckCircle2, AlertCircle, Info, User, Phone, BookOpen } from 'lucide-react'
+import { Turnstile } from '@/components/Turnstile'
 import { createRegistro, getCursos, ValidationApiError } from '@/services/api'
 import { safeRedirect } from '@/lib/safeRedirect'
 import { normalizeDui, formatDuiInput } from '@/lib/dui'
@@ -117,7 +118,10 @@ export function RegistroPage() {
   const [submitted, setSubmitted] = useState(false)
   const [newRegistro, setNewRegistro] = useState<Registro | null>(null)
   const [submissionError, setSubmissionError] = useState('')
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileUnavailable, setTurnstileUnavailable] = useState(false)
   const [cursos, setCursos] = useState<Array<{ id: string; nombre: string }>>([])
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITEKEY ?? ''
 
   // Read the post-registration continuation target from the URL. With
   // HashRouter the actual URL is `/#/registro?redirect=...`, so
@@ -132,6 +136,9 @@ export function RegistroPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
+    if (!turnstileSiteKey) {
+      console.warn('[turnstile] VITE_TURNSTILE_SITEKEY not configured; widget disabled (dev mode)')
+    }
     getCursos({ estado: 'enrolling' })
       .then(data => setCursos(data.map(curso => ({ id: curso.id, nombre: curso.nombre }))))
       .catch(console.error)
@@ -201,12 +208,20 @@ export function RegistroPage() {
 
   const handleSubmit = async () => {
     setSubmissionError('')
+    if (turnstileSiteKey && !turnstileUnavailable && !turnstileToken) {
+      setSubmissionError('Por favor completá la verificación de seguridad')
+      return
+    }
     // Normalize DUI on the client so the wire payload matches the canonical
     // form before the backend re-validates. Empty input short-circuits to
     // null so the backend's `normalizeDui` is the authoritative validator.
     const normalizedDui = normalizeDui(form.dui)
     try {
-      const result = await createRegistro({ ...form, dui: normalizedDui ?? form.dui })
+      const result = await createRegistro({
+        ...form,
+        dui: normalizedDui ?? form.dui,
+        turnstileToken: turnstileToken ?? '',
+      })
       setNewRegistro(result)
       setSubmitted(true)
       const safe = safeRedirect(redirectTarget)
@@ -301,7 +316,7 @@ export function RegistroPage() {
           </div>
           {submissionError && <p className="mt-4 text-sm text-error">{submissionError}</p>}
           <div className="mt-8 flex gap-4 justify-center">
-            <button onClick={() => { setSubmitted(false); setStep(1); setForm(initialForm) }} className="px-6 py-2.5 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-colors">
+            <button onClick={() => { setSubmitted(false); setStep(1); setForm(initialForm); setTurnstileToken(null); setTurnstileUnavailable(false) }} className="px-6 py-2.5 bg-gold text-charcoal text-sm font-semibold rounded-xl hover:bg-gold-light transition-colors">
               Nuevo registro
             </button>
             <Link to="/" className="px-6 py-2.5 border border-warm-tan/20 text-ivory text-sm rounded-xl hover:border-gold/30 transition-colors">
@@ -530,6 +545,25 @@ export function RegistroPage() {
                       <span className="text-sm text-ivory/70">Autorizo el uso de mis datos para fines del registro ACOES</span>
                     </label>
                     {errors.autorizaDatos && <p className="text-xs text-error">{errors.autorizaDatos}</p>}
+
+                    {turnstileSiteKey && !turnstileUnavailable && (
+                      <Turnstile
+                        siteKey={turnstileSiteKey}
+                        onToken={setTurnstileToken}
+                        onError={() => setSubmissionError('No se pudo completar la verificación de seguridad')}
+                        onUnavailable={() => {
+                          console.warn('[turnstile] Widget unavailable; allowing registration without a token')
+                          setTurnstileUnavailable(true)
+                          setSubmissionError('')
+                        }}
+                      />
+                    )}
+                    {submissionError && (
+                      <div className="p-4 rounded-xl bg-error/10 border border-error/30 text-error flex items-start gap-3" role="alert" data-testid="submit-error-banner">
+                        <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm">{submissionError}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
