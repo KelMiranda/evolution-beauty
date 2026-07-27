@@ -260,6 +260,12 @@ export async function createRegistro(data: Omit<Registro, 'id' | 'codigo' | 'fec
     phone_country: data.pais,
     phone_dial_code: data.prefijo,
     phone_number: data.celular,
+    // The public participant schema (`participantBaseObjectSchema`) requires
+    // a combined `phone` string (>= 5 chars). The SPA collects the country
+    // prefix and the local number in two separate fields; we synthesize the
+    // legacy `phone` value here so the wire payload satisfies the schema and
+    // the enrollment round-trip (PR3) can complete end-to-end.
+    phone: `${data.prefijo ?? ''} ${data.celular ?? ''}`.trim() || undefined,
     email: data.correo,
     address: data.direccion,
     municipality: data.municipio,
