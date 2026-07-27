@@ -5,11 +5,13 @@ const {
   findParticipantDuplicatesMock,
   createParticipantMock,
   createNotificationMock,
+  verifyTurnstileTokenMock,
 } = vi.hoisted(() => ({
   ensureDatabaseMock: vi.fn(),
   findParticipantDuplicatesMock: vi.fn(),
   createParticipantMock: vi.fn(),
   createNotificationMock: vi.fn(),
+  verifyTurnstileTokenMock: vi.fn(),
 }));
 
 vi.mock('../bootstrap', () => ({ ensureDatabase: ensureDatabaseMock }));
@@ -17,6 +19,7 @@ vi.mock('../participants', () => ({
   findParticipantDuplicates: findParticipantDuplicatesMock,
   createParticipant: createParticipantMock,
 }));
+vi.mock('../turnstile', () => ({ verifyTurnstileToken: verifyTurnstileTokenMock }));
 vi.mock('../notifications', () => ({
   createNotification: createNotificationMock,
   notificationKinds: { duplicateInReview: 'duplicate_in_review' },
@@ -62,6 +65,37 @@ describe('POST /api/public/participants (JSON branch)', () => {
     findParticipantDuplicatesMock.mockReset().mockResolvedValue([]);
     createParticipantMock.mockReset();
     createNotificationMock.mockReset();
+    verifyTurnstileTokenMock.mockReset().mockResolvedValue({ ok: true });
+  });
+
+  it('returns HTTP 400 before persistence when Turnstile rejects the token', async () => {
+    verifyTurnstileTokenMock.mockResolvedValue({ ok: false, reason: 'Falta el token de Turnstile' });
+
+    const response = await POST({ request: makeRequest(baseValidPayload) } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'turnstile_failed',
+      message: 'Falta el token de Turnstile',
+    });
+    expect(createParticipantMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the JSON token and Cloudflare client IP to Turnstile verification', async () => {
+    createParticipantMock.mockResolvedValue({ id: 42, participant_code: 'ACOES-2026-0001' });
+    const request = new Request('http://localhost/api/public/participants', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'cf-connecting-ip': '203.0.113.2',
+      },
+      body: JSON.stringify({ ...baseValidPayload, turnstileToken: 'verified-token' }),
+    });
+
+    const response = await POST({ request } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(201);
+    expect(verifyTurnstileTokenMock).toHaveBeenCalledWith('verified-token', '203.0.113.2');
   });
 
   it('returns HTTP 400 with per-field Zod issues when gender is invalid', async () => {

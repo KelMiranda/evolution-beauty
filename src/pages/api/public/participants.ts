@@ -6,11 +6,13 @@ import { createNotification, notificationKinds } from '../../../lib/server/notif
 import { validateParticipantSubmission } from '../../../lib/server/participant-schema';
 import { createParticipant, findParticipantDuplicates } from '../../../lib/server/participants';
 import { publicParticipantSubmissionSchema } from '../../../lib/server/public-participant-schema';
+import { verifyTurnstileToken } from '../../../lib/server/turnstile';
 
 export const POST: APIRoute = async ({ request }) => {
   await ensureDatabase();
 
   const contentType = request.headers.get('content-type') ?? '';
+  let turnstileToken: string | undefined;
   let parsedParticipant:
     | {
         courseId?: number;
@@ -39,6 +41,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   if (contentType.includes('application/json')) {
     const raw = (await request.json()) as Record<string, unknown>;
+    turnstileToken = typeof raw.turnstileToken === 'string' ? raw.turnstileToken : undefined;
     const normalized = {
       courseId: pickNumber(raw, 'courseId', 'course_id'),
       fullName: pickString(raw, 'fullName', 'full_name'),
@@ -72,6 +75,8 @@ export const POST: APIRoute = async ({ request }) => {
     parsedParticipant = parsed.data;
   } else {
     const formData = await request.formData();
+    const formTurnstileToken = formData.get('cf-turnstile-response');
+    turnstileToken = typeof formTurnstileToken === 'string' ? formTurnstileToken : undefined;
     const validated = validateParticipantSubmission(formData, 'Pendiente');
     if (!validated.success) {
       return new Response('Datos inválidos', { status: 400 });
@@ -81,6 +86,16 @@ export const POST: APIRoute = async ({ request }) => {
   }
   if (!parsedParticipant) {
     return new Response('Datos inválidos', { status: 400 });
+  }
+
+  const forwardedIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const remoteIp = request.headers.get('cf-connecting-ip') ?? forwardedIp;
+  const turnstile = await verifyTurnstileToken(turnstileToken, remoteIp);
+  if (!turnstile.ok) {
+    return Response.json(
+      { error: 'turnstile_failed', message: turnstile.reason },
+      { status: 400 },
+    );
   }
 
   const duplicates = await findParticipantDuplicates({
