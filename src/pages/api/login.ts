@@ -3,10 +3,12 @@ import { z } from 'zod';
 
 import { createSession, loginUser } from '../../lib/server/auth';
 import { normalizeRole } from '../../lib/server/permissions';
+import { verifyTurnstileToken } from '../../lib/server/turnstile';
 
 const schema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  turnstileToken: z.string().optional(),
 });
 
 export const POST: APIRoute = async ({ request, cookies }) => {
@@ -27,6 +29,21 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // The Turnstile helper gracefully no-ops when `TURNSTILE_SECRET` is empty
+  // (dev mode), so this check stays inert until the secret is configured.
+  // The token is forwarded as-is so the server-side helper can match it
+  // against Cloudflare's siteverify response.
+  const remoteIp =
+    request.headers.get('cf-connecting-ip') ??
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const turnstile = await verifyTurnstileToken(parsed.data.turnstileToken, remoteIp ?? undefined);
+  if (!turnstile.ok) {
+    return new Response(
+      JSON.stringify({ error: 'turnstile_failed', message: turnstile.reason }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    );
   }
 
   const user = await loginUser(parsed.data.email, parsed.data.password);
