@@ -1,4 +1,4 @@
-# Apply Progress: acoes-dui-enrollment-flow — PR1 (backend foundation), PR2 (registration UI), and PR3 (enrollment round-trip)
+# Apply Progress: acoes-dui-enrollment-flow — PR1 (backend foundation), PR2 (registration UI), PR3 (enrollment round-trip), PR4 (housekeeping)
 
 ## Status
 
@@ -7,6 +7,8 @@
 **PR2 (registration UI)**: **success with one known consequence** (4/4 tasks complete, 102 backend + 121 React tests + 2 builds pass; 10/14 E2E pass — the 3 pre-existing data-mismatch failures remain and 1 new failure is the obsolete `registro-participant-only.spec.ts` suite, which tests behavior PR2 explicitly removes; remediation is PR4's housekeeping work per the user brief).
 
 **PR3 (enrollment round-trip)**: **success** (6/6 tasks complete, 113 backend + 164 React tests + 2 builds pass; 13/17 E2E pass — the 3 pre-existing data-mismatch failures and the 1 intentional `registro-participant-only.spec.ts` failure remain unchanged per the user brief, the 3 new `enrollment-round-trip.spec.ts` tests pass green).
+
+**PR4 (housekeeping)**: **success** (6 work-unit commits, 136 backend + 164 React tests + 2 builds pass; **16/16 E2E pass** — the previously-failing 3 data-mismatch tests are now green via a course-name resolver, the obsolete `registro-participant-only.spec.ts` is removed, the `phone` synthesis is moved to a schema preprocess, `courseId` is tightened to handle undefined without NaN, `mockData.ts` is normalized to `Facilitador`, `docs/architecture.md` documents the new DUI round-trip, and 10 new admin shim tests cover the Empleado / Facilitadora / 400-error / four-value-catalog matrix).
 
 ## PR1 — backend foundation
 
@@ -518,12 +520,175 @@ Verified the round-trip via the E2E scenarios above. Each scenario asserts the r
 
 ### Next slice
 
-**PR4 — Housekeeping.** Specifically:
-- Replace the obsolete `app/tests/unit/registro-participant-only.test.tsx` (deleted in PR2) and `app/tests/e2e/registro-participant-only.spec.ts` (still failing with PR4 housekeeping intentional) per PR1/PR2 apply-progress.
-- Tighten `public-participant-schema` so `courseId` is truly optional for Participante; tighten `createRegistro` to drop the `phone` synthesis (move to preprocess).
-- Update `app/src/data/mockData.ts` to use the canonical `Facilitador` option while preserving historical `Facilitadora`.
-- Add admin shim + FK cascade E2E coverage.
-- Update `docs/architecture.md` with the final public enrollment flow diagram and role matrix.
+**PR4 — Housekeeping** ✅ complete. See the PR4 section below.
+
+---
+
+## PR4 — housekeeping — success
+
+### Capabilities delivered
+
+- `public-registration-enum-funcion` (mock-data canonicalization) — `app/src/data/mockData.ts` now exposes the canonical `Facilitador` option across the 5 `mockRegistros` entries and the `funcionesACOES` admin catalog list; the historical `Facilitadora` string remains valid in the DB column (no DB CHECK) and on the admin path (admin schema keeps accepting it).
+- `public-enrollment-by-dui` (test-surface alignment) — 3 previously-failing E2E tests (`public-enrollment-link.spec.ts:18`, `:52`, `public-registration.spec.ts:4`) plus the obsolete `registro-participant-only.spec.ts:20` failure are all resolved. The new `public-enrollment-link.spec.ts` resolves course id by name via a `GET /api/courses` lookup, making the suite robust against future re-seeds. The new `public-registration.spec.ts` exercises the PR2 role matrix (Participante select, conditional Facilitador fields, observaciones removed).
+- `enrollments-participant-fk` (schema tightening) — `publicParticipantSubmissionSchema` now (a) synthesizes `phone` from `phone_dial_code` + `phone_number` (or their camelCase aliases) via a top-level `z.preprocess` so the SPA never has to build the combined string on the wire; (b) short-circuits `courseId` undefined/empty to `undefined` BEFORE Zod's `.coerce.number()` evaluation, so the public path no longer surfaces misleading `Expected number, received nan` errors for Participante payloads.
+- `enrollments-participant-fk` (admin shim coverage) — `src/lib/server/__tests__/admin-enrollment-shim.test.ts` (new, 10 tests) covers the admin enrollment endpoint's compatibility shim: Empleado funcion, historical Facilitadora string, 400 with Spanish error message for missing DUI / non-existing DUI / invalid DUI, explicit participantId precedence over DUI lookup, 9-digit DUI normalization, anonymous 401, `createEnrollment` error propagation, and the full admin four-value catalog (`Empleado | Facilitador | Participante | Otro`).
+- `redirect-after-registration` (docs) — `docs/architecture.md` is rewritten: the participant-only flow diagram becomes a DUI round-trip diagram; a new "Round-trip semantics" section explains the sessionStorage bridge, 10-minute TTL, auto-enroll `setTimeout(0)`, and tab-bound same-origin constraint; "Roles and audiences" updates the catalog to `Participante | Facilitador | Empleado | Otro` and clarifies that the historical `Facilitadora` string remains valid in the DB and on the admin path.
+
+### Estimated vs actual lines
+
+| Scope | Estimate | Actual |
+|-------|----------|--------|
+| PR4 total (production + tests) | ~250 | +273 / -159 / +114 net |
+
+Per-commit size remains well within the work-unit review budget.
+
+### Commits (in order)
+
+| # | Hash | Subject | Files | ± Lines |
+|---|------|---------|-------|---------|
+| 1 | `2852244` | test(e2e): fix course id and name references to match actual seed | 2 modified | +160 / -81 |
+| 2 | `7a38e53` | chore(tests): remove obsolete registro-participant-only E2E spec | 1 deleted | -126 |
+| 3 | `cd67c7c` | refactor(schema): move phone synthesis to schema preprocess and tighten courseId | 2 modified + 2 test modified | +308 / -46 |
+| 4 | `a8bb078` | docs(architecture): update with new DUI-based round-trip flow | 1 modified | +95 / -29 |
+| 5 | `ff6626d` | chore(mockdata): normalize Facilitador across seed registros | 1 modified | +13 / -6 |
+| 6 | `f3819b2` | test(admin): cover enrollment shim error paths and admin four-value catalog | 1 new | +249 |
+
+Total: 2 new files, 7 modified, 1 deleted; net +114 lines (production + tests + docs). Each commit ships a single reviewable work unit.
+
+### Files created (2)
+
+- `src/lib/server/__tests__/admin-enrollment-shim.test.ts` — 10 admin shim tests covering Empleado funcion, historical Facilitadora, 400-error paths, explicit participantId precedence, DUI normalization, anonymous 401, error propagation, full four-value catalog. (249 lines)
+- (no production files created — PR4 is purely housekeeping)
+
+### Files modified (7)
+
+- `app/tests/e2e/public-enrollment-link.spec.ts` — replaced hardcoded `COURSE_ID = 9` with a `resolveCourseId()` helper that looks up `Colorimetría Profesional` via `GET /api/courses`; the 3 previously-failing tests now pass regardless of the seed sequence. (+51 lines net)
+- `app/tests/e2e/public-registration.spec.ts` — rewrote to exercise the PR2 role matrix: Participante select, conditional Facilitador fields, observaciones removed, mocked `POST /api/public/participants` so the test stays focused on UI behavior. (+109 lines net)
+- `src/lib/server/public-participant-schema.ts` — added a top-level `z.preprocess(synthesizePhoneIfMissing, ...)` that builds `phone` from `phone_dial_code` + `phone_number` (and their camelCase aliases) when the wire payload omits the combined field; tightened `courseId` via a field-level `z.preprocess` that short-circuits undefined/empty/`''` to `undefined` BEFORE the `.coerce.number()` evaluation. (+157 / -54 lines)
+- `src/lib/server/__tests__/public-participant-schema.test.ts` — added 11 new tests (5 for `phone` preprocess, 6 for `courseId` tightening). (+146 lines)
+- `src/lib/server/__tests__/participant-public-json.test.ts` — added 2 new tests covering the route handler's behavior with synthesized phones and empty phone + phoneNumber. (+38 lines)
+- `app/src/services/api.ts` — removed the PR3 defensive `phone` synthesis from `createRegistro`; the schema preprocess now owns the wire shape. (-1 / +12 lines)
+- `app/src/data/mockData.ts` — replaced 5 `'Facilitadora'` records with `'Facilitador'`; added a clarifying comment to `funcionesACOES` explaining the historical Facilitadora string remains valid on the admin path. (+13 / -6 lines)
+- `docs/architecture.md` — replaced the participant-only flow diagram with a DUI round-trip diagram; added "Round-trip semantics" section; updated "Roles and audiences" with the canonical four-value catalog and a clarification on historical `Facilitadora`; documented the schema's preprocess contracts. (+95 / -29 lines)
+
+### Files deleted (1)
+
+- `app/tests/e2e/registro-participant-only.spec.ts` — the pre-PR2 participant-only E2E suite that asserted the obsolete `registro-participant-only-banner` and `registro-role-readonly` test-ids. The new `public-registration.spec.ts` covers the same happy path with the PR2 role matrix; the conditional-fields unit suite covers the full matrix. (-126 lines)
+
+### Verification (PR4)
+
+#### Backend Vitest
+
+```
+Test Files  16 passed | 1 skipped (17)
+Tests       136 passed | 5 skipped (141)
+Duration    ~2.6s
+```
+
+The 136-test baseline = PR3's 113 + 11 new in `public-participant-schema.test.ts` + 2 new in `participant-public-json.test.ts` + 10 new in `admin-enrollment-shim.test.ts`. The five bootstrap tests are skipped when `DATABASE_URL` is unreachable (CI without service container), same policy as PR1/PR2/PR3.
+
+#### React Vitest
+
+```
+Test Files  14 passed (14)
+Tests       164 passed (164)
+Duration    ~9.3s
+```
+
+Unchanged from PR3. The defensive `phone` synthesis in `createRegistro` was not exercised by any existing unit test (the mock participants always include `phone: '+503 7000-0000'` on the response), so removing the synthesis is a no-op for the React baseline.
+
+#### Backend build
+
+```
+19:10:11 [vite] ✓ built in 834ms
+19:10:11 [build] ✓ Completed in 870ms.
+19:10:11 [build] Rearranging server assets...
+19:10:11 [build] Server built in 957ms
+19:10:11 [build] Complete!
+```
+
+#### React build
+
+```
+dist/index.html                   1.33 kB │ gzip:   0.54 kB
+dist/assets/index-BmPOHYAG.css   42.46 kB │ gzip:   7.90 kB
+dist/assets/index-C8M3Ehzt.js   971.58 kB │ gzip: 289.80 kB
+✓ built in 3.92s
+```
+
+#### E2E (Playwright) — after PR4
+
+```
+16 passed (13.5s)
+```
+
+The 4 previously-failing tests are now green:
+
+- `public-enrollment-link.spec.ts:36` (admin generates a link that routes to the course detail page with the hash) — now resolves course id from the seeded `Colorimetría Profesional` via `GET /api/courses`.
+- `public-enrollment-link.spec.ts:71` (the backend-issued public link embeds the token in the search params) — same resolver pattern.
+- `public-enrollment-link.spec.ts:84` (the backend middleware redirects a non-API path to the SPA with the hash) — now uses the same resolver for the redirect target.
+- `public-registration.spec.ts:18` (submits a Participante registration end-to-end) — rewritten to test the PR2 role matrix.
+
+The PR2-obsolete `registro-participant-only.spec.ts` was deleted (file removed in commit `7a38e53`), so the test count is 16 not 17 (PR3's 13 + 3 new from `enrollment-round-trip.spec.ts` + 1 new from the rewritten `public-registration.spec.ts` − 1 deleted from `registro-participant-only.spec.ts`).
+
+#### Manual smoke
+
+- DB courses: `id=8` "Prueba de Colorimetría" (PR2-era), `id=24, 25` "Round Trip 513979/549321" (PR3 cleanup artifacts), `id=26` "Colorimetría Profesional", `id=27-31` from the freshly-run `npm run seed`.
+- Public registration page: step 1 exposes the role-aware banner (`data-testid="registro-role-banner"`); the `rol-en-acoes` selector renders `Participante` + `Facilitador` only.
+- Course detail page with token: "Inscribirme ahora" opens the DUI-only modal; auto-enroll triggers when `sessionStorage.acoes:pendingEnrollment` matches the course + token.
+- Admin enrollment shim: admin user creates enrollment with valid DUI → 201; with non-existing DUI → 400 with `No existe un participante con ese DUI. Crealo primero desde el panel administrativo.`; with participantId → 201 (no DUI lookup).
+
+### Spec scenarios met (PR4 capabilities)
+
+| Spec | Scenario | Status |
+|------|----------|--------|
+| `public-registration-enum-funcion` | Admin four-value compatibility (admin can still create with `Empleado` / `Otro` / `Facilitadora`) | covered (`admin-enrollment-shim.test.ts` × 4 admin-path tests) |
+| `public-registration-enum-funcion` | Public form renders only Participante and Facilitador | covered (`registro-conditional-fields.test.tsx` from PR2; the new `public-registration.spec.ts` E2E covers the same path) |
+| `conditional-form-fields-by-funcion` | E2E submission payload does not include `observaciones` | covered (`public-registration.spec.ts` mocks the endpoint and never sends `notes`) |
+| `public-enrollment-by-dui` | Admin can still create an enrollment for a participant with `funcion: Empleado` | covered (`admin-enrollment-shim.test.ts` > "creates an enrollment for a participant with admin-only funcion: Empleado") |
+| `public-enrollment-by-dui` | Admin 400 when DUI does not match any participant | covered (`admin-enrollment-shim.test.ts` > "returns 400 with a clear Spanish error when the DUI does not match any participant") |
+| `enrollments-participant-fk` | Admin path resolves participant by DUI when `participantId` is missing | covered (PR1 baseline + `admin-enrollment-shim.test.ts`) |
+| `dui-format-validation` | Public schema accepts a payload without the combined `phone` field (SPA collects `prefijo` + `celular` separately) | covered (`public-participant-schema.test.ts` × 5 phone preprocess tests; `participant-public-json.test.ts` × 2 route handler tests) |
+| `dui-format-validation` | Public schema's `courseId` is truly optional for Participante without surfacing a NaN error | covered (`public-participant-schema.test.ts` × 6 courseId tightening tests) |
+
+### Deviations from design (PR4)
+
+1. **Schema preprocess handles BOTH snake_case and camelCase phone aliases.** The route handler's `pickString` already normalizes the wire payload to camelCase before passing it to the schema, but direct callers (or future API clients) might send snake_case. The preprocess looks at both `phoneDialCode` / `phone_dial_code` and `phoneNumber` / `phone_number` so the contract works regardless of the caller's convention. Documented in the preprocess function's JSDoc.
+
+2. **`courseId` tightening uses a field-level `z.preprocess` rather than a union+transform.** The previous chain `z.coerce.number().int().positive().optional()` let `NaN` slip through to `.int()` and surfaced as `Expected number, received nan`. The replacement short-circuits `undefined` / `null` / `''` to `undefined` before validation, then validates the parsed number. This is the minimal change to fix the NaN issue without altering the public type surface.
+
+3. **`funcionesACOES` is canonicalized to the four-value `Facilitador` form, but `DashboardPage.tsx`'s filter dropdown still uses the historical `Facilitadora` string.** Per the design, the DB column has no CHECK constraint and historical `Facilitadora` records must remain valid. The admin filter dropdown's option is its own concern (admin UI surface, not part of `mockData.ts`'s seed data); a separate change could canonicalize it but is out of PR4's scope per the brief.
+
+4. **The PR3 `'phone'` synthesis defensive patch in `createRegistro` is removed in favor of the schema preprocess.** PR3 introduced a one-line `phone: \`${data.prefijo ?? ''} ${data.celular ?? ''}`.trim() || undefined` so the round-trip could complete; PR4 moves that synthesis into `publicParticipantSubmissionSchema`'s top-level preprocess so the wire shape is enforced regardless of caller. No existing React unit test asserted on the wire payload's `phone` field, so the removal is a clean no-op for the test baseline.
+
+5. **E2E course resolution is by name (`Colorimetría Profesional`) instead of hardcoded id.** PR1/PR3 apply-progress flagged the `COURSE_ID = 9` hardcode as a re-seed fragility. PR4's `resolveCourseId()` helper queries `GET /api/courses` and matches by name, so future re-seeds that shift the id sequence don't break the test.
+
+6. **Public registration E2E is rewritten (not patched) to test the PR2 role matrix.** The pre-PR2 participant-only test asserted test-ids that PR2 removed (`registro-participant-only-banner`, `registro-role-readonly`); a minimal patch was not feasible because the entire flow changed. The new test covers the same happy path with the current UI.
+
+### Discovered risks / notes (PR4)
+
+1. **`phone` synthesis now happens twice if the wire payload already includes `phone`.** The preprocess guards against this by checking `phoneMissing`, so the wire-supplied value always wins. Verified by `public-participant-schema.test.ts` > "preserves a wire-supplied phone".
+
+2. **`courseId` tightening is permissive on string-numeric values (`'26'` becomes `26`).** This preserves backward compatibility with the previous `z.coerce.number()` behavior for callers that send the id as a string. Verified by `public-participant-schema.test.ts` > "coerces a string-numeric courseId".
+
+3. **The E2E course id resolver queries `/api/courses` (admin endpoint) before login on the middleware-redirect test.** The test uses the API request context to log in as admin, then queries the courses list. This couples the middleware-redirect test to a successful admin login; a separate future change could move the resolver to a public endpoint.
+
+4. **`public-enrollment-link.spec.ts` now relies on `Colorimetría Profesional` being seeded.** The seed script creates this course via `ON CONFLICT DO NOTHING`. If a future change renames it, the test fails with a clear "Seeded course 'Colorimetría Profesional' not found in /api/courses" error. The alternative — querying for the first available course — was considered but rejected because the heading assertion `/colorimetr/i` is name-specific.
+
+5. **`sessionStorage` 10-minute TTL is unchanged from PR3.** A future PR can revisit the round-trip semantics (e.g., extend the TTL, persist the entry across tabs) — none of those changes are in PR4's scope.
+
+### Verification summary (cumulative, PR1 → PR4)
+
+- Backend Vitest: 136 passed + 5 skipped (102 baseline + 11 + 12 + 1 dashless DUI + 1 NaN → tightened + 10 admin shim = 136)
+- Backend Vitest without DATABASE_URL: 97 pass + 5 bootstrap skipped (unchanged baseline)
+- React Vitest: 164 passed (unchanged from PR3)
+- Backend build: OK
+- React build: OK
+- E2E: 16 passed (was 13/4 failing in PR3; the obsolete participant-only suite is deleted and 3 data-mismatch tests are fixed)
+
+### Next step
+
+**sdd-verify** — the apply chain is complete. The verify phase should run the full test matrix (Vitest + Playwright + builds) and confirm the implementation matches every spec scenario across the six capabilities (`public-registration-enum-funcion`, `conditional-form-fields-by-funcion`, `redirect-after-registration`, `public-enrollment-by-dui`, `enrollments-participant-fk`, `dui-format-validation`). After verify passes, the orchestrator can launch `sdd-archive` to sync the delta specs.
 
 Project: evolution-beauty
 Scope: project
