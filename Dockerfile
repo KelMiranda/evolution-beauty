@@ -13,6 +13,7 @@ COPY package*.json ./
 RUN npm ci
 
 FROM base AS build
+ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 COPY --from=spa-build /spa/dist ./public
