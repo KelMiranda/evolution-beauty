@@ -47,11 +47,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
     });
   }
 
-  const response = await next();
-  if (response.status !== 404) {
-    return response;
+  // The SPA uses HashRouter, so all client-side routes live after the '#'
+  // fragment. For direct URL access (e.g. `/registro`), we need to redirect
+  // to `/#/registro` so the SPA can read it. For the root path, we serve
+  // the SPA directly (no redirect needed).
+  if (url.pathname !== '/') {
+    const target = new URL(url.pathname + url.search, context.request.url);
+    target.hash = url.pathname + url.search;
+    return Response.redirect(target.toString(), 302);
   }
 
+  // Root path: serve the SPA's index.html.
   try {
     const html = await readFile(SPA_INDEX, 'utf-8');
     return new Response(html, {
@@ -59,6 +65,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   } catch {
-    return response;
+    return new Response('SPA index.html not found', { status: 500 });
   }
 });
