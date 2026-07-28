@@ -28,4 +28,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 EXPOSE 4321
-CMD ["npm", "start"]
+# Force HOST=0.0.0.0 in the CMD. Some versions of @astrojs/node standalone
+# ignore the HOST env var and bind only to 127.0.0.1; setting it via sh -c
+# in the CMD (not just in the ENV) ensures the variable reaches the node
+# process at the right time.
+CMD ["sh", "-c", "HOST=0.0.0.0 PORT=4321 node ./dist/server/entry.mjs"]
