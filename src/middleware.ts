@@ -6,7 +6,10 @@ const ALLOWED_DEV_ORIGINS = new Set([
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ]);
-const SPA_INDEX = fileURLToPath(new URL('../client/index.html', import.meta.url));
+// Resolves to `<repo>/dist/client/index.html` at runtime. The middleware is
+// compiled into `dist/server/chunks/*.mjs`, so we need three `..` segments
+// to climb back to the dist root before entering the client directory.
+const SPA_INDEX = fileURLToPath(new URL('../../../client/index.html', import.meta.url));
 
 function applyCorsHeaders(response: Response, request: Request): Response {
   const origin = request.headers.get('origin');
