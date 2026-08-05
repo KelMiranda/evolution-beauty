@@ -164,7 +164,19 @@ jobs:
           fi
 
       - name: Start Astro backend
-        run: npm start > /tmp/acoes-backend.log 2>&1 &
+        shell: bash
+        run: |
+          nohup npm start > /tmp/acoes-backend.log 2>&1 &
+          echo $! > /tmp/acoes-backend.pid
+
+      - name: Verify Astro backend process
+        shell: bash
+        run: |
+          if ! kill -0 "$(cat /tmp/acoes-backend.pid)" 2>/dev/null; then
+            echo "::error::Astro backend process exited before readiness checks"
+            cat /tmp/acoes-backend.log
+            exit 1
+          fi
 
       - name: Wait for Astro backend
         shell: bash
@@ -188,6 +200,14 @@ jobs:
         working-directory: app
         env:
           CI: 'true'
+
+      - name: Dump backend log on failure
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f /tmp/acoes-backend.log ]; then
+            cat /tmp/acoes-backend.log
+          fi
 
   lint:
     name: Lint & Type Check
