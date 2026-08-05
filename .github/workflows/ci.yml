@@ -140,10 +140,20 @@ jobs:
       - name: Stage React app for Astro
         run: cp -R app/dist/. public/
 
-      - name: Build Astro server
-        run: npm run build
+      - name: Astro type-check
+        # Run `astro check` in its own process so the type-checker heap
+        # (which can spike to ~4 GB on a project this size) is reclaimed
+        # before `astro build` starts. Running both in the same shell
+        # (`astro check && astro build`) shares a single process and
+        # doubles the peak, which is what was hitting OOM at 6 GB.
+        run: npm run astro -- check
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Astro build
+        run: npm run astro -- build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Wait for PostgreSQL
         shell: bash
