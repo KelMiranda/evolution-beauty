@@ -169,8 +169,14 @@ jobs:
       - name: Wait for Astro backend
         shell: bash
         run: |
-          if ! npx --yes wait-on@8.0.3 http-get://127.0.0.1:4321/api/health --timeout 60000; then
-            echo "::error::Backend unavailable; database startup may have failed"
+          if ! npx --yes wait-on@8.0.3 tcp:127.0.0.1:4321 --timeout 180000; then
+            echo "::error::Backend port did not open in time"
+            cat /tmp/acoes-backend.log
+            exit 1
+          fi
+
+          if ! npx --yes wait-on@8.0.3 http-get://127.0.0.1:4321/api/health --timeout 180000; then
+            echo "::error::Backend health endpoint did not respond in time"
             cat /tmp/acoes-backend.log
             exit 1
           fi
