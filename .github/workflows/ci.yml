@@ -71,7 +71,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: ci_user
-          POSTGRES_PASSWORD: ci_password
+          POSTGRES_PASSWORD: change_me_ci_password
           POSTGRES_DB: acoes_local
         ports: ['5432:5432']
         options: >-
@@ -80,8 +80,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://ci_user:ci_password@localhost:5432/acoes_local
-      POSTGRES_PASSWORD: ci_password
+      DATABASE_URL: postgres://ci_user:change_me_ci_password@localhost:5432/acoes_local
+      POSTGRES_PASSWORD: change_me_ci_password
       INITIAL_ADMIN_EMAIL: admin@example.com
       INITIAL_ADMIN_PASSWORD: CHANGE_ME
 

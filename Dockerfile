@@ -15,14 +15,14 @@ COPY package*.json ./
 RUN npm ci
 
 FROM base AS build
-# Increase Node's heap to 8 GB so the Astro SPA + backend build
+# Increase Node's heap to 12 GB so the Astro SPA + backend build
 # (which bundles the SPA and re-runs Astro type-checks) doesn't run
 # out of memory on the CI runner. We run `astro check` and
 # `astro build` as separate steps in CI so the type-checker heap is
 # reclaimed before the bundler starts. The same applies to the
 # runtime image in case any startup code needs more than the
 # default ~1.7 GB.
-ENV NODE_OPTIONS=--max-old-space-size=8192
+ENV NODE_OPTIONS=--max-old-space-size=12288
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 COPY --from=spa-build /spa/dist ./public

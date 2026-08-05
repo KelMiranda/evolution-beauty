@@ -13,25 +13,24 @@ async function seed() {
   const client = await pool.connect();
 
   try {
-    // Create admin user if not exists
+    // Create or refresh admin user from env credentials
     const adminEmail = process.env.INITIAL_ADMIN_EMAIL ?? 'admin@example.com';
     const adminPassword = process.env.INITIAL_ADMIN_PASSWORD ?? 'CHANGE_ME';
 
     const passwordHash = await bcrypt.hash(adminPassword, 10);
 
-    const userResult = await client.query(
+    await client.query(
       `INSERT INTO users (email, password_hash, full_name, role, active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-       ON CONFLICT (email) DO NOTHING
-       RETURNING id`,
+       ON CONFLICT (email) DO UPDATE SET
+         password_hash = EXCLUDED.password_hash,
+         full_name = EXCLUDED.full_name,
+         role = EXCLUDED.role,
+         active = EXCLUDED.active,
+         updated_at = NOW()`,
       [adminEmail, passwordHash, 'Administrador', 'admin', true]
     );
 
-    const adminId = userResult.rows[0]?.id;
-    if (!adminId) {
-      const existing = await client.query('SELECT id FROM users WHERE email = $1', [adminEmail]);
-      await client.query('SELECT setval(\'users_id_seq\', (SELECT MAX(id) FROM users))');
-    }
     console.log('✅ Admin user ensured\n');
 
     const facilitatorEmail = 'facilitator@example.com';
