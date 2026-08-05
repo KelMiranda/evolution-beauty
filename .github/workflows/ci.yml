@@ -84,8 +84,8 @@ jobs:
     env:
       DATABASE_URL: postgres://acoes:acoes@localhost:5432/acoes_local
       POSTGRES_PASSWORD: acoes
-      INITIAL_ADMIN_EMAIL: admin@acoes.local
-      INITIAL_ADMIN_PASSWORD: Admin1234!
+      INITIAL_ADMIN_EMAIL: ${{ secrets.INITIAL_ADMIN_EMAIL }}
+      INITIAL_ADMIN_PASSWORD: ${{ secrets.INITIAL_ADMIN_PASSWORD }}
 
     steps:
       - name: Require database CI configuration
