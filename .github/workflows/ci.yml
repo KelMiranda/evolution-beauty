@@ -169,7 +169,7 @@ jobs:
       - name: Wait for Astro backend
         shell: bash
         run: |
-          if ! npx --yes wait-on@8.0.3 http-get://127.0.0.1:4321/api/courses --timeout 60000; then
+          if ! npx --yes wait-on@8.0.3 http-get://127.0.0.1:4321/api/health --timeout 60000; then
             echo "::error::Backend unavailable; database startup may have failed"
             cat /tmp/acoes-backend.log
             exit 1
