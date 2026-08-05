@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Mock the db module to avoid the fake-DATABASE_URL unhandled rejection;
+// these tests only assert function shapes, not query results.
+vi.mock('../db', () => ({
+  query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
+  withTransaction: vi.fn(async (fn) => fn({ query: vi.fn(async () => ({ rows: [], rowCount: 0 })) })),
+}));
+
 import { countAuditEvents, listAuditEvents } from '../audit';
 
 describe('audit hardening', () => {

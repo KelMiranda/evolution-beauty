@@ -39,41 +39,54 @@ describe('Astro middleware — SPA serving for non-API paths', () => {
     readFileMock.mockResolvedValue('<html><div id="root"></div></html>');
   });
 
-  it('serves the SPA index when Astro returns 404 for a GET request', async () => {
-    const next = makeNext(async () => new Response('Not Found', { status: 404 }));
+  it('serves the SPA index for the root path regardless of Astro response', async () => {
+    // The middleware bypasses Astro's static-file handling for the root and
+    // serves the SPA's index.html from disk. We assert the readFile call
+    // and the 200 status, not a redirect.
+    const next = makeNext(async () => new Response('Astro 404', { status: 404 }));
     const response = await invokeMiddleware(
-      makeContext('http://localhost:4321/cursos/9?token=abc'),
+      makeContext('http://localhost:4321/'),
       next,
     );
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
     expect(await response.text()).toContain('id="root"');
-    expect(next).toHaveBeenCalledTimes(1);
+    // Astro's response is NOT consulted for the root — the middleware short-
+    // circuits before calling next().
+    expect(next).not.toHaveBeenCalled();
     expect(readFileMock).toHaveBeenCalledTimes(1);
   });
 
-  it('returns Astro static-file responses without reading the SPA index', async () => {
-    const next = makeNext(async () => new Response('bundle', {
-      headers: { 'Content-Type': 'text/javascript' },
-    }));
+  it('redirects non-root non-API paths to a hash-fragment URL', async () => {
+    // For SPA routes (e.g. /cursos/9) the middleware 302s to the
+    // matching hash URL (#/cursos/9) so the HashRouter can pick it up.
+    const next = makeNext(async () => new Response('Astro 404', { status: 404 }));
     const response = await invokeMiddleware(
-      makeContext('http://localhost:4321/assets/index.js'),
+      makeContext('http://localhost:4321/cursos/9?token=abc'),
       next,
     );
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe('bundle');
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe(
+      'http://localhost:4321/cursos/9?token=abc#/cursos/9?token=abc',
+    );
+    // Astro is consulted because the redirect path still has to be
+    // computed; the middleware reads the URL and short-circuits with a
+    // redirect without reading the SPA.
     expect(readFileMock).not.toHaveBeenCalled();
   });
 
-  it('preserves Astro 404 when the SPA index is unavailable', async () => {
+  it('returns 500 when the SPA index is unavailable for the root path', async () => {
+    // The middleware always serves the SPA at "/" — if readFile fails it
+    // surfaces a 500 rather than forwarding Astro's 404 (the SPA
+    // fallback would mask real config errors).
     readFileMock.mockRejectedValue(new Error('index missing'));
     const next = makeNext(async () => new Response('Not Found', { status: 404 }));
-    const response = await invokeMiddleware(makeContext('http://localhost:4321/missing'), next);
+    const response = await invokeMiddleware(makeContext('http://localhost:4321/'), next);
 
-    expect(response.status).toBe(404);
-    expect(await response.text()).toBe('Not Found');
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe('SPA index.html not found');
   });
 
   it('returns 405 for non-GET requests outside the API', async () => {
