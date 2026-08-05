@@ -57,7 +57,7 @@ Given `HashRouter`:
 |---|---|---|---|
 | `PUBLIC_SITE_URL` | `http://localhost:4321` | `src/pages/api/courses/[id]/public-link.ts` | Public Astro origin used to build HashRouter enrollment links. |
 | `VITE_API_URL` | `http://localhost:4321` | `app/src/services/api.ts` | Optional build-time API origin for standalone Vite development; relative `/api/*` requests use the Vite proxy. |
-| `VITE_VAPID_PUBLIC_KEY` | `YOUR_VAPID_PUBLIC_KEY` | `app/src/components/NotificationSubscriptionCard.tsx` | Used by the SPA for web-push subscription. |
+| `VITE_VAPID_PUBLIC_KEY` | `CHANGE_ME` | `app/src/components/NotificationSubscriptionCard.tsx` | Used by the SPA for web-push subscription. |
 
 The local `.env` file is gitignored (`/.gitignore` line 4). A fresh
 clone only needs to copy `.env.example` to `.env` and adjust the

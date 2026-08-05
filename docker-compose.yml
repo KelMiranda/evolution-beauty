@@ -4,8 +4,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: acoes_local
-      POSTGRES_USER: acoes
-      POSTGRES_PASSWORD: acoes
+      POSTGRES_USER: CHANGE_ME
+      POSTGRES_PASSWORD: CHANGE_ME
     ports:
       - '5437:5432'
     volumes:
@@ -25,15 +25,15 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://acoes:acoes@db:5432/acoes_local
+      DATABASE_URL: postgres://CHANGE_ME:CHANGE_ME@db:5432/acoes_local
       NODE_ENV: production
       COOKIE_SECURE: 'false'
       PORT: 4321
       HOST: 0.0.0.0
       PUBLIC_SITE_URL: http://localhost:4321
       VITE_TURNSTILE_SITEKEY: ${VITE_TURNSTILE_SITEKEY:-}
-      INITIAL_ADMIN_EMAIL: admin@acoes.local
-      INITIAL_ADMIN_PASSWORD: Admin1234!
+      INITIAL_ADMIN_EMAIL: admin@example.com
+      INITIAL_ADMIN_PASSWORD: CHANGE_ME
     ports:
       - '4321:4321'
     depends_on:

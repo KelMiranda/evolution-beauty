@@ -14,8 +14,8 @@ async function seed() {
 
   try {
     // Create admin user if not exists
-    const adminEmail = process.env.INITIAL_ADMIN_EMAIL ?? 'admin@acoes.local';
-    const adminPassword = process.env.INITIAL_ADMIN_PASSWORD ?? 'Admin1234!';
+    const adminEmail = process.env.INITIAL_ADMIN_EMAIL ?? 'admin@example.com';
+    const adminPassword = process.env.INITIAL_ADMIN_PASSWORD ?? 'CHANGE_ME';
 
     const passwordHash = await bcrypt.hash(adminPassword, 10);
 
@@ -34,8 +34,8 @@ async function seed() {
     }
     console.log('✅ Admin user ensured\n');
 
-    const facilitatorEmail = 'facilitadora@acoes.local';
-    const facilitatorPassword = 'Facilitadora123!';
+    const facilitatorEmail = 'facilitator@example.com';
+    const facilitatorPassword = 'CHANGE_ME';
     const facilitatorHash = await bcrypt.hash(facilitatorPassword, 10);
 
     await client.query(
@@ -218,7 +218,7 @@ async function seed() {
 
     console.log(`\n🎉 Seed complete! ${inserted} courses added.`);
     console.log(`\n📧 Admin: ${adminEmail} / ${adminPassword}`);
-    console.log(`📧 Facilitator: ${facilitatorEmail} / ${facilitatorPassword}`);
+        console.log(`📧 Facilitator: ${facilitatorEmail} / ${facilitatorPassword}`);
   } finally {
     client.release();
     await pool.end();
