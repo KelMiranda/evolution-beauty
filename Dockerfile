@@ -15,10 +15,15 @@ COPY package*.json ./
 RUN npm ci
 
 FROM base AS build
+# Increase Node's heap to 4 GB so the Astro SPA + backend build
+# (which bundles the SPA and re-runs Astro type-checks) doesn't run
+# out of memory on the CI runner. The same applies to the runtime
+# image in case any startup code needs more than the default ~1.7 GB.
+ENV NODE_OPTIONS=--max-old-space-size=4096
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm exec astro check
 COPY --from=spa-build /spa/dist ./public
+RUN npm exec astro check
 RUN npm exec astro build
 
 FROM base AS runtime

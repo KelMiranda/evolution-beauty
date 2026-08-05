@@ -43,10 +43,14 @@ jobs:
 
       - name: Run backend Vitest
         run: npm test
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Run React Vitest
         run: npm run test:unit
         working-directory: app
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -130,12 +134,16 @@ jobs:
       - name: Build React app
         run: npm run build
         working-directory: app
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Stage React app for Astro
         run: cp -R app/dist/. public/
 
       - name: Build Astro server
         run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Wait for PostgreSQL
         shell: bash
