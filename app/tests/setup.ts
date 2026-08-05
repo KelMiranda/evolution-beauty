@@ -10,7 +10,22 @@ import { setupServer } from 'msw/node';
 export { userEvent };
 
 // React pages register GSAP ScrollTrigger at import time; jsdom does not
-// implement matchMedia, so component suites need the browser contract stubbed.
+// implement matchMedia or requestAnimationFrame, so component suites
+// need the browser contract stubbed. The unhandled exception in
+// `gsap/ScrollTrigger.js:372` is `requestAnimationFrame is not defined`
+// when GSAP's internal scroll sync fires a real RAF after the test
+// environment is torn down; the noop + vi.fn() shims below prevent it.
+if (typeof globalThis.requestAnimationFrame !== 'function') {
+  globalThis.requestAnimationFrame = vi.fn((cb: (t: number) => void) =>
+    setTimeout(() => cb(Date.now()), 16),
+  ) as unknown as typeof globalThis.requestAnimationFrame;
+}
+if (typeof globalThis.cancelAnimationFrame !== 'function') {
+  globalThis.cancelAnimationFrame = vi.fn(
+    (handle: number) => clearTimeout(handle as unknown as ReturnType<typeof setTimeout>),
+  ) as unknown as typeof globalThis.cancelAnimationFrame;
+}
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
