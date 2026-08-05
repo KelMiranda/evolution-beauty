@@ -19,7 +19,7 @@ FROM base AS build
 # (which bundles the SPA and re-runs Astro type-checks) doesn't run
 # out of memory on the CI runner. The same applies to the runtime
 # image in case any startup code needs more than the default ~1.7 GB.
-ENV NODE_OPTIONS=--max-old-space-size=4096
+ENV NODE_OPTIONS=--max-old-space-size=6144
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 COPY --from=spa-build /spa/dist ./public
