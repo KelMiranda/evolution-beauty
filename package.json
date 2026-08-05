@@ -10,7 +10,8 @@
     "test": "vitest run",
     "preview": "astro preview",
     "astro": "astro",
-    "seed": "node --import tsx scripts/seed.ts"
+    "seed": "node --import tsx scripts/seed.ts",
+    "bootstrap": "npm run seed"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
