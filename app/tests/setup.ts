@@ -9,22 +9,54 @@ import { setupServer } from 'msw/node';
 
 export { userEvent };
 
-// React pages register GSAP ScrollTrigger at import time; jsdom does not
-// implement matchMedia or requestAnimationFrame, so component suites
-// need the browser contract stubbed. The unhandled exception in
-// `gsap/ScrollTrigger.js:372` is `requestAnimationFrame is not defined`
-// when GSAP's internal scroll sync fires a real RAF after the test
-// environment is torn down; the noop + vi.fn() shims below prevent it.
-if (typeof globalThis.requestAnimationFrame !== 'function') {
-  globalThis.requestAnimationFrame = vi.fn((cb: (t: number) => void) =>
-    setTimeout(() => cb(Date.now()), 16),
-  ) as unknown as typeof globalThis.requestAnimationFrame;
-}
-if (typeof globalThis.cancelAnimationFrame !== 'function') {
-  globalThis.cancelAnimationFrame = vi.fn(
-    (handle: number) => clearTimeout(handle as unknown as ReturnType<typeof setTimeout>),
-  ) as unknown as typeof globalThis.cancelAnimationFrame;
-}
+// GSAP/ScrollTrigger register a global scroll listener on import that
+// calls `requestAnimationFrame` (not via window/globalThis — as a bare
+// identifier) inside a setTimeout. jsdom does not implement rAF, so the
+// callback throws `ReferenceError: requestAnimationFrame is not defined`
+// after the test environment is torn down. The polyfill on
+// `globalThis.requestAnimationFrame` does not help because the GSAP
+// rollup bundle captures the symbol in a way that bypasses the global
+// lookup. The reliable fix is to mock the GSAP modules so the offending
+// code path never runs during tests.
+vi.mock('gsap', () => ({
+  default: {
+    registerPlugin: vi.fn(),
+    timeline: vi.fn(() => ({ to: vi.fn(), from: vi.fn(), fromTo: vi.fn() })),
+    set: vi.fn(),
+    from: vi.fn(),
+    fromTo: vi.fn(),
+    to: vi.fn(),
+    killTweensOf: vi.fn(),
+  },
+  gsap: {
+    registerPlugin: vi.fn(),
+    timeline: vi.fn(() => ({ to: vi.fn(), from: vi.fn(), fromTo: vi.fn() })),
+    set: vi.fn(),
+    from: vi.fn(),
+    fromTo: vi.fn(),
+    to: vi.fn(),
+    killTweensOf: vi.fn(),
+  },
+}));
+vi.mock('gsap/ScrollTrigger', () => ({
+  ScrollTrigger: {
+    refresh: vi.fn(),
+    create: vi.fn(),
+    getAll: vi.fn(() => []),
+    batch: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    killAll: vi.fn(),
+    config: vi.fn(),
+    defaults: vi.fn(),
+    sort: vi.fn(),
+    update: vi.fn(),
+  },
+}));
+vi.mock('@gsap/react', () => ({
+  useGSAP: vi.fn(() => ({ contextSafe: vi.fn(), revert: vi.fn() })),
+  gsap: { registerPlugin: vi.fn() },
+}));
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
