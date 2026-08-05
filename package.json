@@ -6,7 +6,7 @@
     "dev": "astro dev",
     "start": "node ./dist/server/entry.mjs",
     "build": "astro build",
-    "check": "astro check",
+    "check": "astro check --tsconfig tsconfig.check.json",
     "test": "vitest run",
     "preview": "astro preview",
     "astro": "astro",
